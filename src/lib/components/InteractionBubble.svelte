@@ -5,10 +5,17 @@
     event: {
       type: string;
       author: string;
-      avatar?: string;
-      displayName: string;
+      authorAvatar?: string;
+      authorDisplayName: string;
       text: string;
       timestamp: string;
+      subject?: {
+        displayName?: string;
+        avatar?: string;
+        text?: string;
+        image?: string;
+        did?: string;
+      };
     };
   }>();
 
@@ -32,21 +39,74 @@
 
 <div class="bubble-wrapper">
   <div class="avatar-container">
-    {#if event.avatar}
-      <img src={event.avatar} alt={event.displayName} class="avatar" />
-    {:else}
-      <div class="avatar-placeholder">{event.displayName[0]}</div>
-    {/if}
+    <a
+      href="https://bsky.app/profile/{event.author}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {#if event.authorAvatar}
+        <img
+          src={event.authorAvatar}
+          alt={event.authorDisplayName}
+          class="avatar"
+        />
+      {:else}
+        <div class="avatar-placeholder">{event.authorDisplayName[0]}</div>
+      {/if}
+    </a>
   </div>
 
   <div class="content-container">
-    <div class="display-name">{event.displayName}</div>
-    <div class="bubble" style="background-color: {bgColor}">
+    <div class="display-name">{event.authorDisplayName}</div>
+    <div
+      class="bubble"
+      style="background-color: {bgColor}; --bubble-color: {bgColor}"
+    >
       <div class="type-badge">
         <Icon size={12} strokeWidth={3} />
         <span>{event.type.toUpperCase()}</span>
       </div>
-      <div class="text">{event.text}</div>
+
+      {#if event.text}
+        <div class="text">{event.text}</div>
+      {/if}
+
+      {#if event.subject}
+        <div class="subject-preview">
+          <div class="subject-header">
+            <a
+              href="https://bsky.app/profile/{event.subject.did}"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="subject-avatar-link"
+            >
+              {#if event.subject.avatar}
+                <img
+                  src={event.subject.avatar}
+                  alt={event.subject.displayName}
+                  class="subject-avatar"
+                />
+              {:else}
+                <div class="subject-avatar-placeholder">
+                  {event.subject.displayName?.[0] || "?"}
+                </div>
+              {/if}
+            </a>
+            <span class="subject-name">{event.subject.displayName}</span>
+          </div>
+          {#if event.subject.text}
+            <div class="subject-text">{event.subject.text}</div>
+          {/if}
+          {#if event.subject.image}
+            <img
+              src={event.subject.image}
+              alt="attached"
+              class="subject-image"
+            />
+          {/if}
+        </div>
+      {/if}
+
       <div class="timestamp">{event.timestamp}</div>
     </div>
   </div>
@@ -129,8 +189,61 @@
     height: 0;
     border-style: solid;
     border-width: 0 10px 10px 0;
-    border-color: transparent white transparent transparent;
-    /* This color should match the bubble background, but white is default */
+    border-color: transparent var(--bubble-color) transparent transparent;
+  }
+
+  .subject-preview {
+    margin-top: 8px;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+    padding: 8px;
+    border-left: 3px solid rgba(0, 0, 0, 0.1);
+  }
+
+  .subject-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .subject-avatar-link {
+    display: flex;
+  }
+
+  .subject-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+  }
+
+  .subject-avatar-placeholder {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ccc;
+    font-size: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .subject-name {
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #555;
+  }
+
+  .subject-text {
+    font-size: 0.85rem;
+    color: #444;
+    margin-bottom: 4px;
+  }
+
+  .subject-image {
+    width: 100%;
+    border-radius: 4px;
+    margin-top: 4px;
   }
 
   /* Specific bubble tip colors */

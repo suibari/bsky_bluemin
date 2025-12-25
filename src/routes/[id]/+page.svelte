@@ -9,17 +9,24 @@
 
   let id = $derived(page.params.id);
   let agent = new AtpAgent({ service: "https://public.api.bsky.app" });
-  let events = $state<
-    {
-      type: string;
-      uri: string;
-      author: string;
-      avatar?: string;
+  interface InteractionEvent {
+    type: string;
+    uri: string;
+    author: string;
+    authorAvatar?: string;
+    authorDisplayName: string;
+    text: string;
+    timestamp: string;
+    subject?: {
       displayName?: string;
+      avatar?: string;
       text?: string;
-      timestamp: string;
-    }[]
-  >([]);
+      image?: string;
+      did?: string;
+    };
+  }
+
+  let events = $state<InteractionEvent[]>([]);
   let followees = $state<Set<string>>(new Set());
   let profileMap = $state<
     Map<string, { avatar?: string; displayName?: string }>
@@ -110,56 +117,91 @@
     };
   });
 
-  function handleEvent(event: CommitEvent) {
+  async function handleEvent(event: CommitEvent) {
     const did = event.did;
-    if (!followees.has(did)) {
-      console.log("Filtered out DID:", did);
-      return;
-    }
-    console.log("Processing event for DID:", did);
-
-    const profile = profileMap.get(did);
-    let type = "";
-    let text = "";
+    if (!followees.has(did)) return;
 
     const commit = event.commit;
+    const record = commit.record as any;
+    let type = "";
+    let text = "";
+    let subject: InteractionEvent["subject"] = undefined;
+
+    // Reply filtering
+    if (commit.collection === "app.bsky.feed.post" && record.reply) {
+      const parentUri = record.reply.parent.uri;
+      const parentDid = parentUri ? parentUri.split("/")[2] : "";
+      const targetDid = await resolveId(id || "");
+      if (parentDid && !followees.has(parentDid) && parentDid !== targetDid) {
+        return;
+      }
+    }
+
     switch (commit.collection) {
       case "app.bsky.feed.post":
         type = "post";
-        text = (commit.record as any).text || "";
+        text = record.text || "";
         break;
       case "app.bsky.feed.like":
-        type = "like";
-        text = "Liked a post";
-        break;
       case "app.bsky.feed.repost":
-        type = "repost";
-        text = "Reposted a post";
+        type = commit.collection === "app.bsky.feed.like" ? "like" : "repost";
+        const subjectUri = record.subject.uri;
+        try {
+          const res = await agent.getPosts({ uris: [subjectUri] });
+          if (res.data.posts.length > 0) {
+            const post = res.data.posts[0];
+            subject = {
+              displayName: post.author.displayName || post.author.handle,
+              avatar: post.author.avatar,
+              text: (post.record as any).text,
+              image: (post.embed as any)?.images?.[0]?.thumb,
+              did: post.author.did,
+            };
+          }
+        } catch (e) {
+          console.error("Failed to fetch subject post", e);
+        }
+        text = type === "like" ? "Liked a post" : "Reposted a post";
         break;
       case "app.bsky.graph.follow":
         type = "follow";
-        text = `Followed ${(commit.record as any).subject}`;
+        const subjectDid = record.subject;
+        try {
+          const res = await agent.getProfile({ actor: subjectDid });
+          subject = {
+            displayName: res.data.displayName || res.data.handle,
+            avatar: res.data.avatar,
+            did: res.data.did,
+          };
+        } catch (e) {
+          console.error("Failed to fetch subject profile", e);
+        }
+        text = `Followed ${subject?.displayName || subjectDid}`;
         break;
     }
 
     if (type) {
-      events = [
-        {
-          type,
-          uri: event.commit.rev, // Simple unique key, rev is not quite right for URI but works for key
-          author: did,
-          avatar: profile?.avatar,
-          displayName: profile?.displayName || did,
-          text,
-          timestamp: new Date().toLocaleTimeString(),
-        },
-        ...events,
-      ].slice(0, 100);
+      const profile = profileMap.get(did);
+      const newEvent: InteractionEvent = {
+        type,
+        uri: commit.rev + Date.now(),
+        author: did,
+        authorAvatar: profile?.avatar,
+        authorDisplayName: profile?.displayName || did || "Unknown",
+        text,
+        subject,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+      events = [newEvent, ...events].slice(0, 100);
     }
   }
 </script>
 
 <div class="chat-container">
+  {#each events as event (event.uri + event.timestamp)}
+    <InteractionBubble {event} />
+  {/each}
+
   {#if loading}
     <div class="status-msg">Loading followees...</div>
   {:else if error}
@@ -167,27 +209,16 @@
   {:else if events.length === 0}
     <div class="status-msg">Waiting for interactions from followees...</div>
   {/if}
-
-  <div class="messages">
-    {#each events as event (event.uri + event.timestamp)}
-      <InteractionBubble {event} />
-    {/each}
-  </div>
 </div>
 
 <style>
   .chat-container {
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse; /* Natively anchors to bottom, newest items push older up */
     height: calc(100vh - 60px);
-    background-color: #7494c0; /* LINE blue-ish background */
+    background-color: #7494c0;
     overflow-y: auto;
     padding: 10px;
-  }
-
-  .messages {
-    display: flex;
-    flex-direction: column-reverse; /* Bottom to top */
     gap: 12px;
   }
 
