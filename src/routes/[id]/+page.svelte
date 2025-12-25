@@ -141,6 +141,25 @@
       case "app.bsky.feed.post":
         type = "post";
         text = record.text || "";
+        if (record.reply) {
+          try {
+            const res = await agent.getPosts({
+              uris: [record.reply.parent.uri],
+            });
+            if (res.data.posts.length > 0) {
+              const parentPost = res.data.posts[0];
+              subject = {
+                displayName:
+                  parentPost.author.displayName || parentPost.author.handle,
+                avatar: parentPost.author.avatar,
+                text: (parentPost.record as any).text,
+                did: parentPost.author.did,
+              };
+            }
+          } catch (e) {
+            console.error("Failed to fetch reply parent post", e);
+          }
+        }
         break;
       case "app.bsky.feed.like":
       case "app.bsky.feed.repost":
