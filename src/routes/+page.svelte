@@ -13,7 +13,7 @@
     interactions from their followees.
   </p>
   <div class="example">
-    <p>Try: <code>suibari.com</code></p>
+    <p>Try: <a href="/suibari.com"><code>suibari.com</code></a></p>
   </div>
 </div>
 
@@ -42,11 +42,13 @@
     opacity: 0.9;
   }
 
-  .example {
-    margin-top: 2rem;
-    background: rgba(255, 255, 255, 0.1);
-    padding: 1rem 2rem;
-    border-radius: 12px;
+  .example a {
+    color: #3498db;
+    text-decoration: none;
+  }
+
+  .example a:hover {
+    text-decoration: underline;
   }
 
   code {
@@ -54,5 +56,6 @@
     padding: 2px 6px;
     border-radius: 4px;
     font-family: monospace;
+    color: #fff;
   }
 </style>
