@@ -16,6 +16,7 @@
     authorAvatar?: string;
     authorDisplayName: string;
     text: string;
+    image?: string;
     timestamp: string;
     subject?: {
       displayName?: string;
@@ -138,6 +139,7 @@
     const record = commit.record as any;
     let type = "";
     let text = "";
+    let image = "";
     let subject: InteractionEvent["subject"] = undefined;
 
     // Reply filtering
@@ -171,6 +173,21 @@
             }
           } catch (e) {
             console.error("Failed to fetch reply parent post", e);
+          }
+        } else {
+          // Fetch images for top-level posts
+          try {
+            const uri = `at://${did}/${event.commit.collection}/${event.commit.rkey}`;
+            const res = await agent.getPosts({ uris: [uri] });
+            if (res.data.posts.length > 0) {
+              const post = res.data.posts[0];
+              const thumb = (post.embed as any)?.images?.[0]?.thumb;
+              if (thumb) {
+                image = thumb;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to fetch post for image", e);
           }
         }
         break;
@@ -221,6 +238,7 @@
         authorAvatar: profile?.avatar,
         authorDisplayName: profile?.displayName || did || "Unknown",
         text,
+        image,
         subject,
         timestamp: new Date().toLocaleTimeString(),
       };

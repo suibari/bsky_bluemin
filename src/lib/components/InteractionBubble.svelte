@@ -8,6 +8,7 @@
       authorAvatar?: string;
       authorDisplayName: string;
       text: string;
+      image?: string;
       timestamp: string;
       subject?: {
         displayName?: string;
@@ -69,6 +70,12 @@
 
       {#if event.text}
         <div class="text">{event.text}</div>
+      {/if}
+
+      {#if event.image}
+        <div class="image-container">
+          <img src={event.image} alt="attached" class="post-image" />
+        </div>
       {/if}
 
       {#if event.subject}
@@ -177,6 +184,20 @@
     position: relative;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     color: #333;
+  }
+
+  .image-container {
+    margin-top: 8px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .post-image {
+    width: 100%;
+    display: block;
+    max-height: 300px;
+    object-fit: cover;
   }
 
   .subject-preview {
