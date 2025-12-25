@@ -33,6 +33,8 @@
   >(new Map());
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let isTruncated = $state(false);
+  const MAX_TRACKED_FOLLOWEES = 256; // Roughly fits within URL limits for many browsers
   let jetstream: Jetstream | null = null;
 
   async function resolveId(identifier: string) {
@@ -48,21 +50,32 @@
 
   async function fetchFollows(did: string) {
     let cursor: string | undefined;
-    const allFollows = new Set<string>();
+    const allFollows: string[] = [];
     try {
       loading = true;
       do {
         const res = await agent.getFollows({ actor: did, cursor, limit: 100 });
         res.data.follows.forEach((f) => {
-          allFollows.add(f.did);
-          profileMap.set(f.did, {
-            avatar: f.avatar,
-            displayName: f.displayName,
-          });
+          if (allFollows.length < 2000) {
+            // Safety cap for memory
+            allFollows.push(f.did);
+            profileMap.set(f.did, {
+              avatar: f.avatar,
+              displayName: f.displayName,
+            });
+          }
         });
         cursor = res.data.cursor;
+        // Don't keep fetching forever if they have 10k+ follows
+        if (allFollows.length >= 2000) cursor = undefined;
       } while (cursor);
-      followees = allFollows;
+
+      if (allFollows.length > MAX_TRACKED_FOLLOWEES) {
+        isTruncated = true;
+        followees = new Set(allFollows.slice(0, MAX_TRACKED_FOLLOWEES));
+      } else {
+        followees = new Set(allFollows);
+      }
     } catch (e) {
       console.error(e);
       error = "Failed to fetch follows.";
@@ -76,7 +89,7 @@
 
     const init = async () => {
       try {
-        const did = await resolveId(id);
+        const did = await resolveId(id || "");
         await fetchFollows(did);
 
         if (browser && followees.size > 0) {
@@ -90,7 +103,7 @@
             wantedDids: Array.from(followees),
           });
 
-          jetstream.on("commit", (event: CommitEvent) => {
+          jetstream.on("commit", (event: CommitEvent<any>) => {
             console.log(
               "Received commit:",
               event.did,
@@ -117,7 +130,7 @@
     };
   });
 
-  async function handleEvent(event: CommitEvent) {
+  async function handleEvent(event: CommitEvent<any>) {
     const did = event.did;
     if (!followees.has(did)) return;
 
@@ -225,8 +238,16 @@
     <div class="status-msg">Loading followees...</div>
   {:else if error}
     <div class="status-msg error">{error}</div>
-  {:else if events.length === 0}
-    <div class="status-msg">Waiting for interactions from followees...</div>
+  {:else}
+    {#if isTruncated}
+      <div class="warning-banner">
+        ⚠️ Due to having a large number of follows (over {MAX_TRACKED_FOLLOWEES}
+        people), display is limited to only the latest {MAX_TRACKED_FOLLOWEES} people.
+      </div>
+    {/if}
+    {#if events.length === 0}
+      <div class="status-msg">Waiting for interactions from followees...</div>
+    {/if}
   {/if}
 </div>
 
@@ -242,16 +263,26 @@
   }
 
   .status-msg {
+    color: white;
     text-align: center;
     padding: 20px;
-    color: white;
     font-size: 0.9rem;
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 8px;
-    margin: 10px;
+    opacity: 0.8;
   }
 
-  .error {
-    background: rgba(255, 0, 0, 0.3);
+  .status-msg.error {
+    color: #e74c3c;
+  }
+
+  .warning-banner {
+    background-color: rgba(255, 243, 205, 0.9);
+    color: #856404;
+    padding: 10px;
+    margin: 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    text-align: center;
+    border: 1px solid #ffeeba;
+    order: 1000; /* Ensure it stays at the logical "top" (bottom of scroll because of column-reverse) */
   }
 </style>
