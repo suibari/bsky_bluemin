@@ -7,13 +7,13 @@
 </script>
 
 <div class="welcome">
-  <h1>Welcome to Bluemin</h1>
+  <h1>Welcome to Bluemin'</h1>
   <p>
     Enter a Bluesky handle or DID in the top-left box to view real-time
     interactions from their followees.
   </p>
   <div class="example">
-    <p>Try: <code>jay.bsky.team</code></p>
+    <p>Try: <code>suibari.com</code></p>
   </div>
 </div>
 

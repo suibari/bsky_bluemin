@@ -174,22 +174,9 @@
   .bubble {
     padding: 8px 12px;
     border-radius: 16px;
-    border-top-left-radius: 4px;
     position: relative;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     color: #333;
-  }
-
-  .bubble::before {
-    content: "";
-    position: absolute;
-    left: -8px;
-    top: 0;
-    width: 0;
-    height: 0;
-    border-style: solid;
-    border-width: 0 10px 10px 0;
-    border-color: transparent var(--bubble-color) transparent transparent;
   }
 
   .subject-preview {
@@ -244,11 +231,6 @@
     width: 100%;
     border-radius: 4px;
     margin-top: 4px;
-  }
-
-  /* Specific bubble tip colors */
-  .bubble-wrapper :global(.bubble::before) {
-    border-right-color: inherit;
   }
 
   .type-badge {

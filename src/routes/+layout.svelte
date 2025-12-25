@@ -23,7 +23,7 @@
 			onkeydown={handleSearch}
 		/>
 	</div>
-	<div class="title">Bluemin</div>
+	<div class="title">Bluemin'</div>
 </header>
 
 {@render children()}
