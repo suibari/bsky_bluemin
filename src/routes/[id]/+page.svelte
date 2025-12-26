@@ -74,7 +74,16 @@
           limit: 100,
         });
 
-        const batch = res.data.follows.map((f: any) => {
+        // Filter out users with !no-unauthenticated label
+        const filteredFollows = res.data.follows.filter(
+          (profile: any) =>
+            profile.labels == null ||
+            !profile.labels.some(
+              (label: any) => label.val === "!no-unauthenticated",
+            ),
+        );
+
+        const batch = filteredFollows.map((f: any) => {
           // Random circular positioning for dense packing
           const angle = Math.random() * Math.PI * 2;
           const radius = Math.random() * 300;
@@ -348,7 +357,7 @@
   {#if loading}
     <div class="status-overlay">
       <div class="spinner"></div>
-      <p>Gathering your circle...</p>
+      <p>Gathering {id} circle...</p>
     </div>
   {:else if error}
     <div class="status-overlay">
