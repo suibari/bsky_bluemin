@@ -18,7 +18,7 @@
 		<Search size={18} class="search-icon" />
 		<input
 			type="text"
-			placeholder="Handle or DID"
+			placeholder="Search handle..."
 			bind:value={searchTerm}
 			onkeydown={handleSearch}
 		/>
@@ -26,48 +26,56 @@
 	<div class="title">Bluemin'</div>
 </header>
 
-{@render children()}
+<main>
+	{@render children()}
+</main>
 
 <style>
 	:global(body) {
 		margin: 0;
 		padding: 0;
-		font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN",
-			"Hiragino Sans", Meiryo, sans-serif;
-		background-color: #7494c0;
+		font-family: "Inter", "Outfit", "Helvetica Neue", Arial, sans-serif;
+		background-color: #0f172a;
+		color: white;
+		overflow-x: hidden;
 	}
 
 	.header {
-		height: 60px;
-		background-color: #2c3e50;
+		height: 64px;
+		background: rgba(30, 41, 59, 0.7);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		display: flex;
 		align-items: center;
-		padding: 0 16px;
+		padding: 0 24px;
 		color: white;
 		position: sticky;
 		top: 0;
 		z-index: 100;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 	}
 
 	.search-box {
 		display: flex;
 		align-items: center;
-		background: rgba(255, 255, 255, 0.1);
-		border-radius: 20px;
-		padding: 4px 12px;
-		width: 200px;
-		transition: width 0.3s;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 999px;
+		padding: 6px 16px;
+		width: 220px;
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	}
 
 	.search-box:focus-within {
-		width: 250px;
-		background: rgba(255, 255, 255, 0.2);
+		width: 300px;
+		background: rgba(255, 255, 255, 0.1);
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
 	}
 
 	:global(.search-icon) {
-		margin-right: 8px;
-		color: #ccc;
+		margin-right: 10px;
+		color: #94a3b8;
 	}
 
 	input {
@@ -76,17 +84,25 @@
 		color: white;
 		outline: none;
 		width: 100%;
-		font-size: 0.9rem;
+		font-size: 0.95rem;
 	}
 
 	input::placeholder {
-		color: #888;
+		color: #64748b;
 	}
 
 	.title {
 		margin-left: auto;
-		font-weight: bold;
-		font-size: 1.2rem;
-		letter-spacing: 1px;
+		font-weight: 800;
+		font-size: 1.4rem;
+		letter-spacing: -1px;
+		background: linear-gradient(135deg, #3b82f6 0%, #2dd4bf 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
+	main {
+		min-height: calc(100vh - 64px);
 	}
 </style>

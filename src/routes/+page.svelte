@@ -1,61 +1,100 @@
-<script lang="ts">
-  import { onMount } from "svelte";
+<div class="hero">
+  <div class="hero-content">
+    <h1 class="glow-text">Witness the Circle</h1>
+    <p>
+      Discover your community's heartbeat with real-time interaction
+      visualizers. Experience Bluesky through a dynamic, living ecosystem.
+    </p>
 
-  onMount(() => {
-    // Redirect to a default view or show instructions
-  });
-</script>
-
-<div class="welcome">
-  <h1>Welcome to Bluemin'</h1>
-  <p>
-    Enter a Bluesky handle or DID in the top-left box to view real-time
-    interactions from their followees.
-  </p>
-  <div class="example">
-    <p>Try: <a href="/suibari.com"><code>suibari.com</code></a></p>
+    <div class="featured">
+      <p class="label">Quick Start</p>
+      <div class="links">
+        <a href="/suibari.com" class="btn">Explore @suibari.com</a>
+      </div>
+    </div>
   </div>
 </div>
 
 <style>
-  .welcome {
+  .hero {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: calc(100vh - 60px);
+    height: 100%;
+    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
     color: white;
     text-align: center;
-    padding: 20px;
+    padding: 0 20px;
+  }
+
+  .hero-content {
+    max-width: 600px;
+    animation: fadeInUp 1s ease-out;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   h1 {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    font-size: 4rem;
+    font-weight: 900;
+    margin-bottom: 1.5rem;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+
+  .glow-text {
+    background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.3));
   }
 
   p {
-    font-size: 1.1rem;
-    max-width: 500px;
+    font-size: 1.25rem;
+    color: #94a3b8;
     line-height: 1.6;
-    opacity: 0.9;
+    margin-bottom: 2.5rem;
   }
 
-  .example a {
-    color: #3498db;
+  .featured {
+    padding-top: 2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #64748b;
+    margin-bottom: 1rem;
+  }
+
+  .btn {
+    display: inline-block;
+    padding: 12px 32px;
+    background: #3b82f6;
+    color: white;
     text-decoration: none;
+    border-radius: 999px;
+    font-weight: 600;
+    transition: all 0.3s;
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
   }
 
-  .example a:hover {
-    text-decoration: underline;
-  }
-
-  code {
-    background: rgba(0, 0, 0, 0.3);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-family: monospace;
-    color: #fff;
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(59, 130, 246, 0.6);
+    background: #2563eb;
   }
 </style>

@@ -1,14 +1,15 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { page } from "$app/state";
   import { browser } from "$app/environment";
   import { AtpAgent } from "@atproto/api";
   import { Jetstream, type CommitEvent } from "@skyware/jetstream";
-  import InteractionBubble from "$lib/components/InteractionBubble.svelte";
-  import { Search } from "lucide-svelte";
+  import AvatarNode from "$lib/components/AvatarNode.svelte";
+  import * as d3 from "d3-force";
 
   let id = $derived(page.params.id);
   let agent = new AtpAgent({ service: "https://public.api.bsky.app" });
+
   interface InteractionEvent {
     type: string;
     uri: string;
@@ -18,25 +19,31 @@
     text: string;
     image?: string;
     timestamp: string;
-    subject?: {
-      displayName?: string;
-      avatar?: string;
-      text?: string;
-      image?: string;
-      did?: string;
-    };
+    id: string; // unique id for each instance of event
+    url?: string;
   }
 
-  let events = $state<InteractionEvent[]>([]);
-  let followees = $state<Set<string>>(new Set());
-  let profileMap = $state<
-    Map<string, { avatar?: string; displayName?: string }>
-  >(new Map());
+  interface Node extends d3.SimulationNodeDatum {
+    did: string;
+    avatar?: string;
+    displayName: string;
+    interactionCount: number;
+    sizeFactor: number;
+    radius: number;
+  }
+
+  // To trigger reactions in AvatarNode, we store the latest event per author
+  let latestEvents = $state<Map<string, InteractionEvent>>(new Map());
+  let nodes = $state<Node[]>([]);
+
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let isTruncated = $state(false);
-  const MAX_TRACKED_FOLLOWEES = 256; // Roughly fits within URL limits for many browsers
   let jetstream: Jetstream | null = null;
+  let simulation: d3.Simulation<Node, undefined> | null = null;
+  let decayInterval: any;
+
+  const MAX_FOLLOWEES = 256;
+  const BASE_RADIUS = 24; // 48 / 2
 
   async function resolveId(identifier: string) {
     try {
@@ -50,33 +57,40 @@
   }
 
   async function fetchFollows(did: string) {
-    let cursor: string | undefined;
-    const allFollows: string[] = [];
     try {
       loading = true;
+      let cursor: string | undefined;
+      const allFollows: Node[] = [];
+
       do {
-        const res = await agent.getFollows({ actor: did, cursor, limit: 100 });
-        res.data.follows.forEach((f) => {
-          if (allFollows.length < 2000) {
-            // Safety cap for memory
-            allFollows.push(f.did);
-            profileMap.set(f.did, {
-              avatar: f.avatar,
-              displayName: f.displayName,
-            });
-          }
+        const res = await agent.getFollows({
+          actor: did,
+          cursor,
+          limit: 100,
         });
+
+        const batch = res.data.follows.map((f) => ({
+          did: f.did,
+          avatar: f.avatar,
+          displayName: f.displayName || f.handle,
+          x: (Math.random() - 0.5) * 400,
+          y: (Math.random() - 0.5) * 400,
+          interactionCount: 0,
+          sizeFactor: 1,
+          radius: BASE_RADIUS,
+        }));
+
+        allFollows.push(...batch);
         cursor = res.data.cursor;
-        // Don't keep fetching forever if they have 10k+ follows
-        if (allFollows.length >= 2000) cursor = undefined;
+
+        // Safety cap and respect the limit
+        if (allFollows.length >= MAX_FOLLOWEES) {
+          cursor = undefined;
+        }
       } while (cursor);
 
-      if (allFollows.length > MAX_TRACKED_FOLLOWEES) {
-        isTruncated = true;
-        followees = new Set(allFollows.slice(0, MAX_TRACKED_FOLLOWEES));
-      } else {
-        followees = new Set(allFollows);
-      }
+      nodes = allFollows.slice(0, MAX_FOLLOWEES);
+      initSimulation();
     } catch (e) {
       console.error(e);
       error = "Failed to fetch follows.";
@@ -85,15 +99,32 @@
     }
   }
 
-  onMount(() => {
-    let cleanup: () => void;
+  function initSimulation() {
+    if (!browser) return;
 
+    simulation = d3
+      .forceSimulation<Node>(nodes)
+      .velocityDecay(0.15) // Slightly more fluid
+      .alphaDecay(0.005) // Stay active longer
+      .force("charge", d3.forceManyBody().strength(-80)) // Balance density
+      .force("x", d3.forceX(0).strength(0.15)) // Center X
+      .force("y", d3.forceY(0).strength(0.15)) // Center Y
+      .force(
+        "collide",
+        d3.forceCollide<Node>((d) => d.radius + 15).iterations(8),
+      )
+      .on("tick", () => {
+        nodes = [...nodes]; // Trigger reactivity
+      });
+  }
+
+  onMount(() => {
     const init = async () => {
       try {
-        const did = await resolveId(id || "");
-        await fetchFollows(did);
+        const targetDid = await resolveId(id || "");
+        await fetchFollows(targetDid);
 
-        if (browser && followees.size > 0) {
+        if (browser && nodes.length > 0) {
           jetstream = new Jetstream({
             wantedCollections: [
               "app.bsky.feed.post",
@@ -101,16 +132,10 @@
               "app.bsky.feed.repost",
               "app.bsky.graph.follow",
             ],
-            wantedDids: Array.from(followees),
+            wantedDids: nodes.map((n) => n.did),
           });
 
           jetstream.on("commit", (event: CommitEvent<any>) => {
-            console.log(
-              "Received commit:",
-              event.did,
-              event.commit.collection,
-              event.commit.operation,
-            );
             if (event.commit.operation === "create") {
               handleEvent(event);
             }
@@ -126,181 +151,186 @@
 
     init();
 
+    // Decay loop for sizing and simulation alpha update
+    decayInterval = setInterval(() => {
+      let changed = false;
+      nodes.forEach((node) => {
+        if (node.interactionCount > 0) {
+          node.interactionCount = Math.max(0, node.interactionCount - 0.01);
+          const oldSize = node.sizeFactor;
+          node.sizeFactor =
+            1 + Math.min(1.5, Math.log10(node.interactionCount + 1));
+          node.radius = BASE_RADIUS * node.sizeFactor;
+          if (Math.abs(oldSize - node.sizeFactor) > 0.01) {
+            changed = true;
+          }
+        }
+      });
+      if (changed && simulation) {
+        simulation.alphaTarget(0.1).restart();
+        // Return to 0 alphaTarget shortly after
+        setTimeout(() => simulation?.alphaTarget(0), 100);
+      }
+    }, 1000);
+
     return () => {
       if (jetstream) jetstream.close();
+      if (simulation) simulation.stop();
+      if (decayInterval) clearInterval(decayInterval);
     };
   });
 
   async function handleEvent(event: CommitEvent<any>) {
     const did = event.did;
-    if (!followees.has(did)) return;
+    const authorNode = nodes.find((n) => n.did === did);
+    if (!authorNode) return;
 
     const commit = event.commit;
     const record = commit.record as any;
     let type = "";
     let text = "";
-    let image = "";
-    let subject: InteractionEvent["subject"] = undefined;
+    let url = "";
 
-    // Reply filtering
-    if (commit.collection === "app.bsky.feed.post" && record.reply) {
-      const parentUri = record.reply.parent.uri;
-      const parentDid = parentUri ? parentUri.split("/")[2] : "";
-      const targetDid = await resolveId(id || "");
-      if (parentDid && !followees.has(parentDid) && parentDid !== targetDid) {
-        return;
-      }
-    }
+    const rkey = event.commit.rkey;
+    const authorDid = event.did;
 
     switch (commit.collection) {
       case "app.bsky.feed.post":
         type = "post";
         text = record.text || "";
-        if (record.reply) {
-          try {
-            const res = await agent.getPosts({
-              uris: [record.reply.parent.uri],
-            });
-            if (res.data.posts.length > 0) {
-              const parentPost = res.data.posts[0];
-              subject = {
-                displayName:
-                  parentPost.author.displayName || parentPost.author.handle,
-                avatar: parentPost.author.avatar,
-                text: (parentPost.record as any).text,
-                did: parentPost.author.did,
-              };
-            }
-          } catch (e) {
-            console.error("Failed to fetch reply parent post", e);
-          }
-        } else {
-          // Fetch images for top-level posts
-          try {
-            const uri = `at://${did}/${event.commit.collection}/${event.commit.rkey}`;
-            const res = await agent.getPosts({ uris: [uri] });
-            if (res.data.posts.length > 0) {
-              const post = res.data.posts[0];
-              const thumb = (post.embed as any)?.images?.[0]?.thumb;
-              if (thumb) {
-                image = thumb;
-              }
-            }
-          } catch (e) {
-            console.error("Failed to fetch post for image", e);
-          }
-        }
+        url = `https://bsky.app/profile/${authorDid}/post/${rkey}`;
         break;
       case "app.bsky.feed.like":
       case "app.bsky.feed.repost":
         type = commit.collection === "app.bsky.feed.like" ? "like" : "repost";
-        const subjectUri = record.subject.uri;
-        try {
-          const res = await agent.getPosts({ uris: [subjectUri] });
-          if (res.data.posts.length > 0) {
-            const post = res.data.posts[0];
-            subject = {
-              displayName: post.author.displayName || post.author.handle,
-              avatar: post.author.avatar,
-              text: (post.record as any).text,
-              image: (post.embed as any)?.images?.[0]?.thumb,
-              did: post.author.did,
-            };
-          }
-        } catch (e) {
-          console.error("Failed to fetch subject post", e);
-        }
         text = type === "like" ? "Liked a post" : "Reposted a post";
+        if (record.subject?.uri) {
+          const uri = record.subject.uri;
+          const parts = uri.replace("at://", "").split("/");
+          if (parts.length >= 3) {
+            url = `https://bsky.app/profile/${parts[0]}/post/${parts[2]}`;
+          }
+        }
         break;
       case "app.bsky.graph.follow":
         type = "follow";
-        const subjectDid = record.subject;
-        try {
-          const res = await agent.getProfile({ actor: subjectDid });
-          subject = {
-            displayName: res.data.displayName || res.data.handle,
-            avatar: res.data.avatar,
-            did: res.data.did,
-          };
-        } catch (e) {
-          console.error("Failed to fetch subject profile", e);
+        text = "Followed someone";
+        if (record.subject) {
+          url = `https://bsky.app/profile/${record.subject}`;
         }
-        text = `Followed ${subject?.displayName || subjectDid}`;
         break;
     }
 
     if (type) {
-      const profile = profileMap.get(did);
+      // Increment interaction count and trigger simulation refresh
+      authorNode.interactionCount += 1;
+      authorNode.sizeFactor =
+        1 + Math.min(1.5, Math.log10(authorNode.interactionCount + 1));
+      authorNode.radius = BASE_RADIUS * authorNode.sizeFactor;
+      if (simulation) {
+        simulation.alphaTarget(0.3).restart();
+        setTimeout(() => simulation?.alphaTarget(0), 100);
+      }
+
       const newEvent: InteractionEvent = {
         type,
-        uri: commit.rev + Date.now(),
+        uri: commit.rev,
         author: did,
-        authorAvatar: profile?.avatar,
-        authorDisplayName: profile?.displayName || did || "Unknown",
+        authorAvatar: authorNode.avatar,
+        authorDisplayName: authorNode.displayName,
         text,
-        image,
-        subject,
         timestamp: new Date().toLocaleTimeString(),
+        id: Math.random().toString(36).substring(7),
+        url,
       };
-      events = [newEvent, ...events].slice(0, 100);
+
+      latestEvents.set(did, newEvent);
+      latestEvents = new Map(latestEvents);
     }
   }
 </script>
 
-<div class="chat-container">
-  {#each events as event (event.uri + event.timestamp)}
-    <InteractionBubble {event} />
-  {/each}
-
+<div class="page-container">
   {#if loading}
-    <div class="status-msg">Loading followees...</div>
+    <div class="status-overlay">
+      <div class="spinner"></div>
+      <p>Gathering your circle...</p>
+    </div>
   {:else if error}
-    <div class="status-msg error">{error}</div>
+    <div class="status-overlay">
+      <p class="error">{error}</p>
+    </div>
   {:else}
-    {#if isTruncated}
-      <div class="warning-banner">
-        ⚠️ Due to having a large number of follows (over {MAX_TRACKED_FOLLOWEES}
-        people), display is limited to only the latest {MAX_TRACKED_FOLLOWEES} people.
-      </div>
-    {/if}
-    {#if events.length === 0}
-      <div class="status-msg">Waiting for interactions from followees...</div>
-    {/if}
+    <div class="nodes-wrapper">
+      {#each nodes as node (node.did)}
+        <AvatarNode
+          did={node.did}
+          avatar={node.avatar}
+          displayName={node.displayName}
+          event={latestEvents.get(node.did)}
+          x={node.x ?? 0}
+          y={node.y ?? 0}
+          sizeFactor={node.sizeFactor}
+        />
+      {/each}
+    </div>
   {/if}
 </div>
 
 <style>
-  .chat-container {
+  :global(body) {
+    margin: 0;
+    overflow: hidden;
+    background: #0f172a;
+  }
+
+  .page-container {
+    width: 100vw;
+    height: 100vh;
     display: flex;
-    flex-direction: column-reverse; /* Natively anchors to bottom, newest items push older up */
-    height: calc(100vh - 60px);
-    background-color: #7494c0;
-    overflow-y: auto;
-    padding: 10px;
-    gap: 12px;
-  }
-
-  .status-msg {
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
     color: white;
-    text-align: center;
-    padding: 20px;
-    font-size: 0.9rem;
-    opacity: 0.8;
+    position: relative;
+    overflow: hidden;
   }
 
-  .status-msg.error {
-    color: #e74c3c;
+  .nodes-wrapper {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
   }
 
-  .warning-banner {
-    background-color: rgba(255, 243, 205, 0.9);
-    color: #856404;
-    padding: 10px;
-    margin: 10px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    text-align: center;
-    border: 1px solid #ffeeba;
-    order: 1000; /* Ensure it stays at the logical "top" (bottom of scroll because of column-reverse) */
+  .status-overlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    z-index: 100;
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .error {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 12px 24px;
+    border-radius: 999px;
   }
 </style>
