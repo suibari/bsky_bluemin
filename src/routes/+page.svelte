@@ -1,15 +1,14 @@
 <div class="hero">
   <div class="hero-content">
-    <h1 class="glow-text">Witness the Circle</h1>
     <p>
-      Discover your community's heartbeat with real-time interaction
-      visualizers. Experience Bluesky through a dynamic, living ecosystem.
+      Enter your handle in the top left to display real-time interactions from
+      the people you follow. Feel your Bluesky!
     </p>
 
     <div class="featured">
-      <p class="label">Quick Start</p>
+      <p class="label">Example:</p>
       <div class="links">
-        <a href="/suibari.com" class="btn">Explore @suibari.com</a>
+        <a href="/suibari.com" class="btn">suibari.com</a>
       </div>
     </div>
   </div>

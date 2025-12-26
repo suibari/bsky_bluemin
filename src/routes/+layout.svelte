@@ -47,7 +47,7 @@
 		-webkit-backdrop-filter: blur(12px);
 		display: flex;
 		align-items: center;
-		padding: 0 24px;
+		padding: 0 12px;
 		color: white;
 		position: sticky;
 		top: 0;
@@ -62,7 +62,7 @@
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 999px;
 		padding: 6px 16px;
-		width: 220px;
+		width: 200px;
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	}
 

@@ -106,9 +106,9 @@
       .forceSimulation<Node>(nodes)
       .velocityDecay(0.15) // Slightly more fluid
       .alphaDecay(0.005) // Stay active longer
-      .force("charge", d3.forceManyBody().strength(-80)) // Balance density
-      .force("x", d3.forceX(0).strength(0.15)) // Center X
-      .force("y", d3.forceY(0).strength(0.15)) // Center Y
+      .force("charge", d3.forceManyBody().strength(-100)) // Slightly more repulsion
+      .force("x", d3.forceX(0).strength(0.05)) // Weaker pull to center X
+      .force("y", d3.forceY(0).strength(0.05)) // Weaker pull to center Y
       .force(
         "collide",
         d3.forceCollide<Node>((d) => d.radius + 15).iterations(8),
