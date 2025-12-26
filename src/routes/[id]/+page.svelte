@@ -74,17 +74,23 @@
           limit: 100,
         });
 
-        const batch = res.data.follows.map((f: any) => ({
-          did: f.did,
-          avatar: f.avatar,
-          displayName: f.displayName || f.handle,
-          x: (Math.random() - 0.5) * 400,
-          y: (Math.random() - 0.5) * 400,
-          interactionCount: 0,
-          sizeFactor: 1,
-          radius: BASE_RADIUS,
-          hasInteracted: false,
-        }));
+        const batch = res.data.follows.map((f: any) => {
+          // Random circular positioning for dense packing
+          const angle = Math.random() * Math.PI * 2;
+          const radius = Math.random() * 300;
+
+          return {
+            did: f.did,
+            avatar: f.avatar,
+            displayName: f.displayName || f.handle,
+            x: radius * Math.cos(angle),
+            y: radius * Math.sin(angle),
+            interactionCount: 0,
+            sizeFactor: 1,
+            radius: BASE_RADIUS,
+            hasInteracted: false,
+          };
+        });
 
         allFollows.push(...batch);
         cursor = res.data.cursor;
@@ -117,15 +123,21 @@
 
     simulation = d3
       .forceSimulation<Node>(nodes)
-      .velocityDecay(isMobile ? 0.3 : 0.15)
+      .velocityDecay(0.3)
       .alphaDecay(0.01)
-      .force("charge", d3.forceManyBody().strength(isMobile ? -30 : -80))
-      .force("x", d3.forceX(0).strength(isMobile ? 0.1 : 0.05))
-      .force("y", d3.forceY(0).strength(isMobile ? 0.1 : 0.05))
+      .force("charge", d3.forceManyBody<Node>().strength(-20))
+      .force(
+        "radial",
+        d3.forceRadial<Node>(0, 0, 0).strength((d) => {
+          // Interacted nodes pushed strongly to center, others pulled weakly
+          return d.hasInteracted ? 0.8 : 0.03;
+        }),
+      )
       .force(
         "collide",
         d3
-          .forceCollide<Node>((d) => d.radius + (isMobile ? 8 : 15))
+          .forceCollide<Node>((d) => d.radius + 12)
+          .strength(1)
           .iterations(8),
       )
       .on("tick", () => {
@@ -219,6 +231,14 @@
       });
       if (changed && simulation) {
         nodes = [...nodes]; // Trigger reactivity for sizeFactor updates
+        // Update collision force to account for new radii
+        simulation.force(
+          "collide",
+          d3
+            .forceCollide<Node>((d) => d.radius + 12)
+            .strength(1)
+            .iterations(8),
+        );
         simulation.alphaTarget(0.1).restart();
         setTimeout(() => simulation?.alphaTarget(0), 100);
       }
@@ -280,8 +300,22 @@
       nodes = [...nodes]; // Explicitly trigger reactivity
 
       if (simulation) {
-        simulation.alphaTarget(0.7).restart();
-        setTimeout(() => simulation?.alphaTarget(0), 200);
+        // Update forces to apply new strength for interacted node
+        simulation.force(
+          "radial",
+          d3.forceRadial<Node>(0, 0, 0).strength((d) => {
+            return d.hasInteracted ? 0.8 : 0.03;
+          }),
+        );
+        simulation.force(
+          "collide",
+          d3
+            .forceCollide<Node>((d) => d.radius + 12)
+            .strength(1)
+            .iterations(8),
+        );
+        simulation.alphaTarget(0.8).restart();
+        setTimeout(() => simulation?.alphaTarget(0), 500);
       }
 
       const newEvent: InteractionEvent = {
