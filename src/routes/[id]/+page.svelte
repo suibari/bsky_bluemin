@@ -242,7 +242,7 @@
         simulation.alphaTarget(0.1).restart();
         setTimeout(() => simulation?.alphaTarget(0), 100);
       }
-    }, 1000);
+    }, 100);
 
     return () => {
       cleanup();
@@ -315,7 +315,7 @@
             .iterations(8),
         );
         simulation.alphaTarget(0.8).restart();
-        setTimeout(() => simulation?.alphaTarget(0), 500);
+        setTimeout(() => simulation?.alphaTarget(0), 100);
       }
 
       const newEvent: InteractionEvent = {
