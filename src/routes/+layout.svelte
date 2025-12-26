@@ -5,8 +5,9 @@
 	let { children } = $props();
 	let searchTerm = $state("");
 
-	function handleSearch(e: KeyboardEvent) {
-		if (e.key === "Enter" && searchTerm.trim()) {
+	function handleSearch(e: SubmitEvent) {
+		e.preventDefault();
+		if (searchTerm.trim()) {
 			goto(`/${searchTerm.trim()}`);
 			searchTerm = "";
 		}
@@ -14,15 +15,10 @@
 </script>
 
 <header class="header">
-	<div class="search-box">
+	<form class="search-box" onsubmit={handleSearch}>
 		<Search size={18} class="search-icon" />
-		<input
-			type="text"
-			placeholder="Search handle..."
-			bind:value={searchTerm}
-			onkeydown={handleSearch}
-		/>
-	</div>
+		<input type="text" placeholder="Search handle..." bind:value={searchTerm} />
+	</form>
 	<div class="title">Bluemin'</div>
 </header>
 

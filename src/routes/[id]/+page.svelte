@@ -30,6 +30,7 @@
     interactionCount: number;
     sizeFactor: number;
     radius: number;
+    hasInteracted: boolean;
   }
 
   let latestEvents = $state<Map<string, InteractionEvent>>(new Map());
@@ -44,6 +45,7 @@
   let transform = $state({ x: 0, y: 0, k: 1 });
 
   const MAX_FOLLOWEES = 256;
+  const SAMPLE_POOL_SIZE = 2000;
   const BASE_RADIUS = 24;
   let innerWidth = $state(browser ? window.innerWidth : 1200);
   let isMobile = $derived(innerWidth < 640);
@@ -81,17 +83,26 @@
           interactionCount: 0,
           sizeFactor: 1,
           radius: BASE_RADIUS,
+          hasInteracted: false,
         }));
 
         allFollows.push(...batch);
         cursor = res.data.cursor;
 
-        if (allFollows.length >= MAX_FOLLOWEES) {
+        if (allFollows.length >= SAMPLE_POOL_SIZE) {
           cursor = undefined;
         }
       } while (cursor);
 
-      nodes = allFollows.slice(0, MAX_FOLLOWEES);
+      // Randomly select MAX_FOLLOWEES if pool is larger
+      let selectedFollows = allFollows;
+      if (allFollows.length > MAX_FOLLOWEES) {
+        selectedFollows = allFollows
+          .sort(() => Math.random() - 0.5)
+          .slice(0, MAX_FOLLOWEES);
+      }
+
+      nodes = selectedFollows;
       initSimulation();
     } catch (e) {
       console.error(e);
@@ -122,10 +133,34 @@
       });
   }
 
-  onMount(() => {
+  function cleanup() {
+    if (jetstream) {
+      jetstream.close();
+      jetstream = null;
+    }
+    if (simulation) {
+      simulation.stop();
+      simulation = null;
+    }
+    if (decayInterval) {
+      clearInterval(decayInterval);
+    }
+  }
+
+  $effect(() => {
+    // Reactively track id
+    const targetId = id;
+
+    // Reset state for new ID
+    nodes = [];
+    loading = true;
+    error = null;
+    latestEvents = new Map();
+    cleanup();
+
     const init = async () => {
       try {
-        const targetDid = await resolveId(id || "");
+        const targetDid = await resolveId(targetId || "");
         await fetchFollows(targetDid);
         loading = false;
         await tick();
@@ -175,8 +210,7 @@
         if (node.interactionCount > 0) {
           node.interactionCount = Math.max(0, node.interactionCount - 0.01);
           const oldSize = node.sizeFactor;
-          node.sizeFactor =
-            1 + Math.min(1.5, Math.log10(node.interactionCount + 1));
+          node.sizeFactor = 1 + Math.log10(node.interactionCount + 1);
           node.radius = BASE_RADIUS * node.sizeFactor;
           if (Math.abs(oldSize - node.sizeFactor) > 0.01) {
             changed = true;
@@ -191,9 +225,7 @@
     }, 1000);
 
     return () => {
-      if (jetstream) jetstream.close();
-      if (simulation) simulation.stop();
-      if (decayInterval) clearInterval(decayInterval);
+      cleanup();
     };
   });
 
@@ -241,9 +273,9 @@
     if (type) {
       console.log(`Interaction detected for ${did}: ${type}`);
       authorNode.interactionCount += 1;
-      authorNode.sizeFactor =
-        1 + Math.min(1.5, Math.log10(authorNode.interactionCount + 1));
+      authorNode.sizeFactor = 1 + Math.log10(authorNode.interactionCount + 1);
       authorNode.radius = BASE_RADIUS * authorNode.sizeFactor;
+      authorNode.hasInteracted = true;
 
       nodes = [...nodes]; // Explicitly trigger reactivity
 
@@ -305,6 +337,7 @@
               y={node.y ?? 0}
               sizeFactor={node.sizeFactor}
               baseRadius={BASE_RADIUS}
+              hasInteracted={node.hasInteracted}
             />
           {/each}
         </div>

@@ -21,6 +21,7 @@
     y,
     sizeFactor = 1,
     baseRadius = 24,
+    hasInteracted = false,
   } = $props<{
     did: string;
     avatar?: string;
@@ -30,6 +31,7 @@
     y: number;
     sizeFactor?: number;
     baseRadius?: number;
+    hasInteracted?: boolean;
   }>();
 
   let activeBubbles = $state<InteractionEvent[]>([]);
@@ -85,8 +87,9 @@
 
 <div
   class="node-container"
-  style="--node-size: {avatarSize}px; left: {x}px; top: {y}px; z-index: {activeBubbles.length >
-  0
+  style="--node-size: {avatarSize}px; --grayscale: {hasInteracted
+    ? 0
+    : 100}%; left: {x}px; top: {y}px; z-index: {activeBubbles.length > 0
     ? 100
     : 1};"
 >
@@ -166,6 +169,8 @@
     object-fit: cover;
     border: 2px solid white;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    filter: grayscale(var(--grayscale, 100%));
+    transition: filter 0.5s ease;
   }
 
   .avatar-placeholder {
@@ -180,6 +185,8 @@
     font-weight: bold;
     font-size: calc(var(--node-size) / 2.5);
     border: 2px solid white;
+    filter: grayscale(var(--grayscale, 100%));
+    transition: filter 0.5s ease;
   }
 
   .bubbles-container {
