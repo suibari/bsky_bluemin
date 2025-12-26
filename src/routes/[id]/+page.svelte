@@ -123,8 +123,8 @@
 
     simulation = d3
       .forceSimulation<Node>(nodes)
-      .velocityDecay(0.3)
-      .alphaDecay(0.01)
+      .velocityDecay(0.01)
+      .alphaDecay(0.05)
       .force("charge", d3.forceManyBody<Node>().strength(-20))
       .force(
         "radial",
