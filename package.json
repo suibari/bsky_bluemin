@@ -23,8 +23,14 @@
 	"dependencies": {
 		"@atproto/api": "^0.18.8",
 		"@skyware/jetstream": "^0.2.5",
+		"@types/d3": "^7.4.3",
 		"@types/d3-force": "^3.0.10",
+		"@types/d3-selection": "^3.0.11",
+		"@types/d3-zoom": "^3.0.8",
+		"d3": "^7.9.0",
 		"d3-force": "^3.0.0",
+		"d3-selection": "^3.0.0",
+		"d3-zoom": "^3.0.0",
 		"lucide-svelte": "^0.562.0"
 	}
 }

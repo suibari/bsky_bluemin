@@ -20,6 +20,7 @@
     x,
     y,
     sizeFactor = 1,
+    baseRadius = 24,
   } = $props<{
     did: string;
     avatar?: string;
@@ -28,6 +29,7 @@
     x: number;
     y: number;
     sizeFactor?: number;
+    baseRadius?: number;
   }>();
 
   let activeBubbles = $state<InteractionEvent[]>([]);
@@ -78,7 +80,7 @@
     if (retryTimer) clearTimeout(retryTimer);
   });
 
-  let avatarSize = $derived(48 * sizeFactor);
+  let avatarSize = $derived(baseRadius * 2 * sizeFactor);
 </script>
 
 <div
@@ -210,6 +212,12 @@
     border: 1px solid rgba(0, 0, 0, 0.05);
     max-width: 100%;
     transition: transform 0.2s ease;
+  }
+
+  @media (max-width: 640px) {
+    .bubble-popup {
+      padding: 4px 8px;
+    }
   }
 
   .bubble-link:hover .bubble-popup {

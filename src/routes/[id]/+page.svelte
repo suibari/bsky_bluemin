@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
-  import { page } from "$app/state";
+  import { onMount, onDestroy, untrack, tick } from "svelte";
   import { browser } from "$app/environment";
+  import { page } from "$app/state";
   import { AtpAgent } from "@atproto/api";
   import { Jetstream, type CommitEvent } from "@skyware/jetstream";
   import AvatarNode from "$lib/components/AvatarNode.svelte";
-  import * as d3 from "d3-force";
+  import * as d3 from "d3";
 
   let id = $derived(page.params.id);
   let agent = new AtpAgent({ service: "https://public.api.bsky.app" });
@@ -19,7 +19,7 @@
     text: string;
     image?: string;
     timestamp: string;
-    id: string; // unique id for each instance of event
+    id: string;
     url?: string;
   }
 
@@ -32,18 +32,21 @@
     radius: number;
   }
 
-  // To trigger reactions in AvatarNode, we store the latest event per author
   let latestEvents = $state<Map<string, InteractionEvent>>(new Map());
   let nodes = $state<Node[]>([]);
-
   let loading = $state(true);
   let error = $state<string | null>(null);
   let jetstream: Jetstream | null = null;
   let simulation: d3.Simulation<Node, undefined> | null = null;
   let decayInterval: any;
 
+  let zoomContainer = $state<HTMLElement | null>(null);
+  let transform = $state({ x: 0, y: 0, k: 1 });
+
   const MAX_FOLLOWEES = 256;
-  const BASE_RADIUS = 24; // 48 / 2
+  const BASE_RADIUS = 24;
+  let innerWidth = $state(browser ? window.innerWidth : 1200);
+  let isMobile = $derived(innerWidth < 640);
 
   async function resolveId(identifier: string) {
     try {
@@ -60,7 +63,7 @@
     try {
       loading = true;
       let cursor: string | undefined;
-      const allFollows: Node[] = [];
+      const allFollows: any[] = [];
 
       do {
         const res = await agent.getFollows({
@@ -69,7 +72,7 @@
           limit: 100,
         });
 
-        const batch = res.data.follows.map((f) => ({
+        const batch = res.data.follows.map((f: any) => ({
           did: f.did,
           avatar: f.avatar,
           displayName: f.displayName || f.handle,
@@ -83,7 +86,6 @@
         allFollows.push(...batch);
         cursor = res.data.cursor;
 
-        // Safety cap and respect the limit
         if (allFollows.length >= MAX_FOLLOWEES) {
           cursor = undefined;
         }
@@ -104,17 +106,19 @@
 
     simulation = d3
       .forceSimulation<Node>(nodes)
-      .velocityDecay(0.15) // Slightly more fluid
-      .alphaDecay(0.005) // Stay active longer
-      .force("charge", d3.forceManyBody().strength(-100)) // Slightly more repulsion
-      .force("x", d3.forceX(0).strength(0.05)) // Weaker pull to center X
-      .force("y", d3.forceY(0).strength(0.05)) // Weaker pull to center Y
+      .velocityDecay(isMobile ? 0.3 : 0.15)
+      .alphaDecay(0.01)
+      .force("charge", d3.forceManyBody().strength(isMobile ? -30 : -100))
+      .force("x", d3.forceX(0).strength(isMobile ? 0.15 : 0.05))
+      .force("y", d3.forceY(0).strength(isMobile ? 0.15 : 0.05))
       .force(
         "collide",
-        d3.forceCollide<Node>((d) => d.radius + 15).iterations(8),
+        d3
+          .forceCollide<Node>((d) => d.radius + (isMobile ? 12 : 20))
+          .iterations(8),
       )
       .on("tick", () => {
-        nodes = [...nodes]; // Trigger reactivity
+        nodes = [...nodes];
       });
   }
 
@@ -123,8 +127,22 @@
       try {
         const targetDid = await resolveId(id || "");
         await fetchFollows(targetDid);
+        loading = false;
+        await tick();
 
         if (browser && nodes.length > 0) {
+          if (zoomContainer) {
+            const zoom = d3
+              .zoom<HTMLElement, unknown>()
+              .scaleExtent([0.1, 5])
+              .on("zoom", (event) => {
+                const { x, y, k } = event.transform;
+                transform = { x, y, k };
+              });
+
+            d3.select(zoomContainer).call(zoom);
+          }
+
           jetstream = new Jetstream({
             wantedCollections: [
               "app.bsky.feed.post",
@@ -151,7 +169,6 @@
 
     init();
 
-    // Decay loop for sizing and simulation alpha update
     decayInterval = setInterval(() => {
       let changed = false;
       nodes.forEach((node) => {
@@ -167,8 +184,8 @@
         }
       });
       if (changed && simulation) {
+        nodes = [...nodes]; // Trigger reactivity for sizeFactor updates
         simulation.alphaTarget(0.1).restart();
-        // Return to 0 alphaTarget shortly after
         setTimeout(() => simulation?.alphaTarget(0), 100);
       }
     }, 1000);
@@ -185,13 +202,13 @@
     const authorNode = nodes.find((n) => n.did === did);
     if (!authorNode) return;
 
-    const commit = event.commit;
-    const record = commit.record as any;
+    const commit = event.commit as any;
+    const record = commit.record;
     let type = "";
     let text = "";
     let url = "";
 
-    const rkey = event.commit.rkey;
+    const rkey = commit.rkey;
     const authorDid = event.did;
 
     switch (commit.collection) {
@@ -222,11 +239,14 @@
     }
 
     if (type) {
-      // Increment interaction count and trigger simulation refresh
+      console.log(`Interaction detected for ${did}: ${type}`);
       authorNode.interactionCount += 1;
       authorNode.sizeFactor =
         1 + Math.min(1.5, Math.log10(authorNode.interactionCount + 1));
       authorNode.radius = BASE_RADIUS * authorNode.sizeFactor;
+
+      nodes = [...nodes]; // Explicitly trigger reactivity
+
       if (simulation) {
         simulation.alphaTarget(0.3).restart();
         setTimeout(() => simulation?.alphaTarget(0), 100);
@@ -248,7 +268,15 @@
       latestEvents = new Map(latestEvents);
     }
   }
+
+  $effect(() => {
+    if (browser && innerWidth && simulation) {
+      simulation.alpha(0.3).restart();
+    }
+  });
 </script>
+
+<svelte:window bind:innerWidth />
 
 <div class="page-container">
   {#if loading}
@@ -261,18 +289,26 @@
       <p class="error">{error}</p>
     </div>
   {:else}
-    <div class="nodes-wrapper">
-      {#each nodes as node (node.did)}
-        <AvatarNode
-          did={node.did}
-          avatar={node.avatar}
-          displayName={node.displayName}
-          event={latestEvents.get(node.did)}
-          x={node.x ?? 0}
-          y={node.y ?? 0}
-          sizeFactor={node.sizeFactor}
-        />
-      {/each}
+    <div class="zoom-container" bind:this={zoomContainer}>
+      <div
+        class="transform-layer"
+        style="transform: translate({transform.x}px, {transform.y}px) scale({transform.k});"
+      >
+        <div class="nodes-wrapper">
+          {#each nodes as node (node.did)}
+            <AvatarNode
+              did={node.did}
+              avatar={node.avatar}
+              displayName={node.displayName}
+              event={latestEvents.get(node.did)}
+              x={node.x ?? 0}
+              y={node.y ?? 0}
+              sizeFactor={node.sizeFactor}
+              baseRadius={BASE_RADIUS}
+            />
+          {/each}
+        </div>
+      </div>
     </div>
   {/if}
 </div>
@@ -294,6 +330,22 @@
     color: white;
     position: relative;
     overflow: hidden;
+  }
+
+  .zoom-container {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+  }
+
+  .zoom-container:active {
+    cursor: grabbing;
+  }
+
+  .transform-layer {
+    width: 100%;
+    height: 100%;
+    transform-origin: 0 0;
   }
 
   .nodes-wrapper {

@@ -55,6 +55,13 @@
 		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 	}
 
+	@media (max-width: 640px) {
+		.header {
+			height: 56px;
+			padding: 0 12px;
+		}
+	}
+
 	.search-box {
 		display: flex;
 		align-items: center;
@@ -71,6 +78,15 @@
 		background: rgba(255, 255, 255, 0.1);
 		border-color: #3b82f6;
 		box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+	}
+
+	@media (max-width: 640px) {
+		.search-box {
+			width: 140px;
+		}
+		.search-box:focus-within {
+			width: 180px;
+		}
 	}
 
 	:global(.search-icon) {
