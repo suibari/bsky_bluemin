@@ -108,13 +108,13 @@
       .forceSimulation<Node>(nodes)
       .velocityDecay(isMobile ? 0.3 : 0.15)
       .alphaDecay(0.01)
-      .force("charge", d3.forceManyBody().strength(isMobile ? -30 : -100))
-      .force("x", d3.forceX(0).strength(isMobile ? 0.15 : 0.05))
-      .force("y", d3.forceY(0).strength(isMobile ? 0.15 : 0.05))
+      .force("charge", d3.forceManyBody().strength(isMobile ? -30 : -80))
+      .force("x", d3.forceX(0).strength(isMobile ? 0.1 : 0.05))
+      .force("y", d3.forceY(0).strength(isMobile ? 0.1 : 0.05))
       .force(
         "collide",
         d3
-          .forceCollide<Node>((d) => d.radius + (isMobile ? 12 : 20))
+          .forceCollide<Node>((d) => d.radius + (isMobile ? 8 : 15))
           .iterations(8),
       )
       .on("tick", () => {
@@ -248,8 +248,8 @@
       nodes = [...nodes]; // Explicitly trigger reactivity
 
       if (simulation) {
-        simulation.alphaTarget(0.3).restart();
-        setTimeout(() => simulation?.alphaTarget(0), 100);
+        simulation.alphaTarget(0.7).restart();
+        setTimeout(() => simulation?.alphaTarget(0), 200);
       }
 
       const newEvent: InteractionEvent = {
