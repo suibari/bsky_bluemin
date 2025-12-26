@@ -242,7 +242,7 @@
         simulation.alphaTarget(0.1).restart();
         setTimeout(() => simulation?.alphaTarget(0), 100);
       }
-    }, 100);
+    }, 1000);
 
     return () => {
       cleanup();
