@@ -38,7 +38,6 @@
     <span class="loading">Loading...</span>
   {:else if isAuthenticated}
     <div class="user-info">
-      <span>{user?.handle || user?.did || "User"}</span>
       <button on:click={signOut} class="btn-signout" title="Sign Out"
         >Sign Out</button
       >

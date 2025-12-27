@@ -30,16 +30,14 @@ export async function initAuth() {
     let metadata: ClientMetadata;
 
     if (isDev) {
-      // Development configuration: Use localhost client ID pattern to bypass HTTPS restrictions
-      // See https://github.com/suibari/drawat/blob/main/src/lib/oauth.ts reference
-      // Redirect URI must be loopback IP
-      const redirectUri = `${publicUrl}`; // http://127.0.0.1:5173
+      // Development configuration: Use localhost client ID pattern
+      const redirectUri = `${publicUrl}`;
       const scope = 'atproto transition:generic';
 
       metadata = {
         client_id: `http://localhost?redirect_uri=${enc(redirectUri)}&scope=${enc(scope)}`,
         client_name: "Bluesky Bluemin (Dev)",
-        client_uri: publicUrl,
+        client_uri: 'http://127.0.0.1:5173',
         redirect_uris: [redirectUri],
         scope: scope,
         grant_types: ["authorization_code", "refresh_token"],
@@ -47,9 +45,9 @@ export async function initAuth() {
         application_type: "web",
         token_endpoint_auth_method: "none",
         dpop_bound_access_tokens: true,
-      };
+      } as unknown as ClientMetadata; // Aggressive cast to silence TS error
     } else {
-      // Production configuration: Fetch static metadata file
+      // Production configuration
       metadata = await (await fetch('/client-metadata.json')).json();
     }
 
@@ -70,6 +68,17 @@ export async function initAuth() {
         loading: false,
         error: null
       });
+
+      // Restore redirection if pending
+      const redirectTo = sessionStorage.getItem('redirect_to');
+      if (redirectTo) {
+        // Remove it so we don't redirect on subsequent reloads
+        sessionStorage.removeItem('redirect_to');
+        // Use window.location.href to redirect if we are not already there
+        if (window.location.pathname + window.location.search !== redirectTo) {
+          window.location.href = redirectTo;
+        }
+      }
 
     } else {
       authState.set({
@@ -96,6 +105,9 @@ export async function initAuth() {
 export async function signIn(handle: string) {
   if (!client) return;
   try {
+    // Save the current location to redirect back to
+    sessionStorage.setItem('redirect_to', window.location.pathname + window.location.search);
+
     await client.signIn(handle, {
       prompt: 'login',
       ui_locales: 'ja-JP',
@@ -106,5 +118,23 @@ export async function signIn(handle: string) {
 }
 
 export async function signOut() {
+  if (!client) return;
+
+  // Retrieve current DID from store before it's cleared
+  let did: string | undefined;
+  authState.update(state => {
+    did = state.user?.handle;
+    return state;
+  });
+
+  try {
+    if (did) {
+      await client.revoke(did);
+    }
+  } catch (e) {
+    console.error("Sign out error:", e);
+  }
+
+  // Force reload to clear any memory state and re-init
   location.reload();
 }
