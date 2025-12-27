@@ -56,6 +56,7 @@
       on:click|stopPropagation
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
     >
       <div class="modal-header">
         <h2>Sign In with Bluesky</h2>
@@ -91,7 +92,7 @@
   .auth-container {
     display: flex;
     align-items: center;
-    margin-left: 1rem;
+    /* margin-left: 1rem;  Removed to allow parent to control spacing */
   }
 
   .user-info {

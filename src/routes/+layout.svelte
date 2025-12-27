@@ -51,18 +51,21 @@
 		-webkit-backdrop-filter: blur(12px);
 		display: flex;
 		align-items: center;
-		padding: 0 12px;
+		/* justify-content: space-between; Removed to keep items on left */
+		padding: 0 16px;
 		color: white;
 		position: sticky;
 		top: 0;
 		z-index: 100;
 		border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+		gap: 12px;
 	}
 
 	@media (max-width: 640px) {
 		.header {
 			height: 56px;
 			padding: 0 12px;
+			gap: 8px;
 		}
 	}
 
@@ -73,12 +76,12 @@
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 999px;
 		padding: 6px 16px;
-		width: 200px;
+		width: 240px;
 		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 	}
 
 	.search-box:focus-within {
-		width: 300px;
+		width: 320px;
 		background: rgba(255, 255, 255, 0.1);
 		border-color: #3b82f6;
 		box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
@@ -86,15 +89,21 @@
 
 	@media (max-width: 640px) {
 		.search-box {
-			width: 140px;
+			padding: 6px 12px;
+			width: 120px;
 		}
 		.search-box:focus-within {
-			width: 180px;
+			width: 100%;
+			position: absolute;
+			left: 12px;
+			right: 12px;
+			z-index: 10;
+			background: #1e293b;
 		}
 	}
 
 	:global(.search-icon) {
-		margin-right: 10px;
+		margin-right: 8px;
 		color: #94a3b8;
 	}
 
@@ -112,7 +121,7 @@
 	}
 
 	.title {
-		margin-left: auto;
+		margin-left: auto; /* Push to right */
 		font-weight: 800;
 		font-size: 1.4rem;
 		letter-spacing: -1px;
@@ -120,6 +129,13 @@
 		-webkit-background-clip: text;
 		background-clip: text;
 		-webkit-text-fill-color: transparent;
+		white-space: nowrap; /* Prevent wrapping */
+	}
+
+	@media (max-width: 640px) {
+		.title {
+			font-size: 1.1rem; /* Smaller font on mobile */
+		}
 	}
 
 	main {
