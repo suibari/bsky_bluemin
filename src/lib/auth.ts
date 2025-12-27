@@ -20,12 +20,21 @@ export const authState = writable<{
 let client: BrowserOAuthClient | null = null;
 const enc = encodeURIComponent;
 
+let isInitializing = false;
+
 export async function initAuth() {
   if (!browser) return;
+  if (isInitializing) {
+    console.log("[Auth] initAuth already running, skipping");
+    return;
+  }
+  isInitializing = true;
+  console.log("[Auth] initAuth started");
 
   try {
     const isDev = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-    const publicUrl = isDev ? 'http://127.0.0.1:5173' : 'https://bluemin.suibari.com';
+    const publicUrl = isDev ? window.location.origin : 'https://bluemin.suibari.com';
+    console.log("[Auth] isDev:", isDev, "publicUrl:", publicUrl);
 
     let metadata: ClientMetadata;
 
@@ -56,7 +65,22 @@ export async function initAuth() {
       clientMetadata: metadata,
     });
 
-    const result = await client.init();
+
+
+    console.log("[Auth] client initialized, calling init()");
+
+    // Create a timeout promise
+    const timeoutPromise = new Promise<undefined>((resolve) => {
+      setTimeout(() => {
+        console.warn("[Auth] client.init() timed out");
+        resolve(undefined);
+      }, 5000); // 5 second timeout
+    });
+
+    // Race client.init against timeout
+    const result = await Promise.race([client.init(), timeoutPromise]);
+
+    console.log("[Auth] client.init() result:", result ? "Session found" : "No session/Timed out");
 
     if (result) {
       const { session } = result;
@@ -81,24 +105,32 @@ export async function initAuth() {
       }
 
     } else {
-      authState.set({
-        isAuthenticated: false,
-        user: null,
-        agent: null,
-        loading: false,
-        error: null
+      console.log("[Auth] No session found (or timed out), setting loading=false");
+      authState.update(s => {
+        console.log("[Auth] Updating store state: loading=false");
+        return {
+          ...s,
+          isAuthenticated: false,
+          user: null,
+          agent: null,
+          loading: false,
+          error: null
+        };
       });
     }
 
   } catch (e: any) {
     console.error("Auth init error:", e);
-    authState.set({
+    authState.update(s => ({
+      ...s,
       isAuthenticated: false,
       user: null,
       agent: null,
       loading: false,
       error: e.message
-    });
+    }));
+  } finally {
+    isInitializing = false;
   }
 }
 

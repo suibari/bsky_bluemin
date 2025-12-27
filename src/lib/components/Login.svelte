@@ -34,9 +34,9 @@
 <svelte:window on:keydown={handleKeydown} />
 
 <div class="auth-container">
-  {#if loading}
+  {#if $authState.loading}
     <span class="loading">Loading...</span>
-  {:else if isAuthenticated}
+  {:else if $authState.isAuthenticated}
     <div class="user-info">
       <button on:click={signOut} class="btn-signout" title="Sign Out"
         >Sign Out</button
