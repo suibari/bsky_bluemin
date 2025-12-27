@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack, tick } from "svelte";
+  import { fade } from "svelte/transition";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { AtpAgent } from "@atproto/api";
@@ -44,6 +45,9 @@
   let jetstream: Jetstream | null = null;
   let simulation: d3.Simulation<Node, undefined> | null = null;
   let decayInterval: any;
+
+  let backgroundImage = $state<string | null>(null);
+  let backgroundImageKey = $state<number>(0);
 
   let zoomContainer = $state<HTMLElement | null>(null);
   let transform = $state({ x: 0, y: 0, k: 1 });
@@ -282,6 +286,30 @@
         type = "post";
         text = record.text || "";
         url = `https://bsky.app/profile/${authorDid}/post/${rkey}`;
+
+        // Check for images in the post itself
+        // Since we need valid image URLs (not blob refs), we fetch the post view
+        // to get the hydrated data.
+        if (
+          record.embed &&
+          (record.embed.$type === "app.bsky.embed.images" ||
+            record.embed.$type === "app.bsky.embed.recordWithMedia")
+        ) {
+          try {
+            const postUri = `at://${authorDid}/app.bsky.feed.post/${rkey}`;
+            const res = await agent.getPosts({ uris: [postUri] });
+            if (res.data.posts.length > 0) {
+              const postView = res.data.posts[0];
+              const img = extractImageFromPostView(postView.embed);
+              if (img) {
+                backgroundImage = img;
+                backgroundImageKey++;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to fetch post for image", e);
+          }
+        }
         break;
       case "app.bsky.feed.like":
       case "app.bsky.feed.repost":
@@ -292,6 +320,22 @@
           const parts = uri.replace("at://", "").split("/");
           if (parts.length >= 3) {
             url = `https://bsky.app/profile/${parts[0]}/post/${parts[2]}`;
+
+            // Fetch interaction target to get image
+            try {
+              const res = await agent.getPosts({ uris: [uri] });
+              if (res.data.posts.length > 0) {
+                const postView = res.data.posts[0];
+                // Look for image in the target post
+                const img = extractImageFromPostView(postView.embed);
+                if (img) {
+                  backgroundImage = img;
+                  backgroundImageKey++;
+                }
+              }
+            } catch (e) {
+              console.error("Failed to fetch interaction target", e);
+            }
           }
         }
         break;
@@ -354,6 +398,29 @@
       simulation.alpha(0.3).restart();
     }
   });
+  function extractImageFromPostView(embed: any): string | null {
+    if (!embed) return null;
+
+    // Images embed
+    if (embed.$type === "app.bsky.embed.images#view" && embed.images?.length) {
+      return embed.images[0].fullsize || embed.images[0].thumb;
+    }
+
+    // Record with media
+    if (embed.$type === "app.bsky.embed.recordWithMedia#view" && embed.media) {
+      return extractImageFromPostView(embed.media);
+    }
+
+    // External embed (card)
+    if (
+      embed.$type === "app.bsky.embed.external#view" &&
+      embed.external?.thumb
+    ) {
+      return embed.external.thumb;
+    }
+
+    return null;
+  }
 </script>
 
 <svelte:window bind:innerWidth />
@@ -369,6 +436,14 @@
       <p class="error">{error}</p>
     </div>
   {:else}
+    {#key backgroundImageKey}
+      {#if backgroundImage}
+        <div class="bg-image-container" transition:fade={{ duration: 1000 }}>
+          <img src={backgroundImage} alt="" class="bg-image" />
+          <div class="bg-overlay"></div>
+        </div>
+      {/if}
+    {/key}
     <div class="zoom-container" bind:this={zoomContainer}>
       <div
         class="transform-layer"
@@ -411,6 +486,33 @@
     color: white;
     position: relative;
     overflow: hidden;
+  }
+
+  .bg-image-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .bg-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.8; /* Adjust transparency here */
+    filter: blur(2px); /* Optional: blur for better text readability on top */
+  }
+
+  .bg-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, transparent 0%, #0f172a 90%);
   }
 
   .zoom-container {
