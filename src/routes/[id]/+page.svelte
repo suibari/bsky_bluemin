@@ -48,6 +48,8 @@
 
   let backgroundImage = $state<string | null>(null);
   let backgroundImageKey = $state<number>(0);
+  let backgroundImageAuthor = $state<string | null>(null);
+  let backgroundImageAuthorDid = $state<string | null>(null);
 
   let zoomContainer = $state<HTMLElement | null>(null);
   let transform = $state({ x: 0, y: 0, k: 1 });
@@ -304,6 +306,9 @@
               if (img) {
                 backgroundImage = img;
                 backgroundImageKey++;
+                backgroundImageAuthor =
+                  postView.author.displayName || postView.author.handle;
+                backgroundImageAuthorDid = postView.author.did;
               }
             }
           } catch (e) {
@@ -331,6 +336,9 @@
                 if (img) {
                   backgroundImage = img;
                   backgroundImageKey++;
+                  backgroundImageAuthor =
+                    postView.author.displayName || postView.author.handle;
+                  backgroundImageAuthorDid = postView.author.did;
                 }
               }
             } catch (e) {
@@ -466,6 +474,17 @@
         </div>
       </div>
     </div>
+    {#if backgroundImage && backgroundImageAuthor}
+      <a
+        href="https://bsky.app/profile/{backgroundImageAuthorDid}"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="bg-author-info"
+        in:fade={{ duration: 1000 }}
+      >
+        By {backgroundImageAuthor}
+      </a>
+    {/if}
   {/if}
 </div>
 
@@ -567,5 +586,26 @@
     background: rgba(239, 68, 68, 0.1);
     padding: 12px 24px;
     border-radius: 999px;
+  }
+
+  .bg-author-info {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    text-decoration: none;
+    z-index: 100;
+    pointer-events: auto;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.2s;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .bg-author-info:hover {
+    color: white;
   }
 </style>
