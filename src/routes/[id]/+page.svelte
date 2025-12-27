@@ -5,10 +5,14 @@
   import { AtpAgent } from "@atproto/api";
   import { Jetstream, type CommitEvent } from "@skyware/jetstream";
   import AvatarNode from "$lib/components/AvatarNode.svelte";
+  import { authState } from "$lib/auth";
   import * as d3 from "d3";
 
   let id = $derived(page.params.id);
-  let agent = new AtpAgent({ service: "https://public.api.bsky.app" });
+  // Default public agent
+  const publicAgent = new AtpAgent({ service: "https://public.api.bsky.app" });
+  // Use authenticated agent if available, otherwise public
+  let agent = $derived($authState.agent || publicAgent);
 
   interface InteractionEvent {
     type: string;
@@ -74,9 +78,10 @@
           limit: 100,
         });
 
-        // Filter out users with !no-unauthenticated label
+        // Filter out users with !no-unauthenticated label IF not authenticated
         const filteredFollows = res.data.follows.filter(
           (profile: any) =>
+            $authState.isAuthenticated || // If authenticated, show everything (or let user preference handle it, but requirement says "do not exclude")
             profile.labels == null ||
             !profile.labels.some(
               (label: any) => label.val === "!no-unauthenticated",

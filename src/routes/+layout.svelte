@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
 	import { Search } from "lucide-svelte";
+	import Login from "$lib/components/Login.svelte";
+	import { initAuth } from "$lib/auth";
+	import { onMount } from "svelte";
 
 	let { children } = $props();
 	let searchTerm = $state("");
@@ -12,6 +15,10 @@
 			searchTerm = "";
 		}
 	}
+
+	onMount(() => {
+		initAuth();
+	});
 </script>
 
 <header class="header">
@@ -19,6 +26,7 @@
 		<Search size={18} class="search-icon" />
 		<input type="text" placeholder="Search handle..." bind:value={searchTerm} />
 	</form>
+	<Login />
 	<div class="title">Bluemin'</div>
 </header>
 
