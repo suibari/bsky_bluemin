@@ -45,6 +45,7 @@
   let jetstream: Jetstream | null = null;
   let simulation: d3.Simulation<Node, undefined> | null = null;
   let decayInterval: any;
+  let simulationUpdatePending = false;
 
   let backgroundImage = $state<string | null>(null);
   let backgroundImageKey = $state<number>(0);
@@ -143,19 +144,21 @@
 
     simulation = d3
       .forceSimulation<Node>(nodes)
-      .velocityDecay(0.01)
-      .alphaDecay(0.05)
-      .force("charge", d3.forceManyBody<Node>().strength(-20))
+      .velocityDecay(0.01) // 摩擦係数（0〜1）。小さいほど止まりにくい（ふわふわする）。デフォルトは0.4
+      .alphaDecay(0.05) // シミュレーションの冷却速度（0〜1）。小さいほど長く動き続ける。デフォルトは0.0228
+      .force("charge", d3.forceManyBody<Node>().strength(-20)) // ノード間の反発力。負の値で反発、正の値で引力。
       .force(
         "radial",
         d3.forceRadial<Node>(0, 0, 0).strength((d) => {
-          // Interacted nodes pushed strongly to center, others pulled weakly
-          return d.hasInteracted ? 0.8 : 0.03;
+          // 中心への引力。インタラクションがあったノードは強く、それ以外は弱く引き寄せる
+          // 強すぎると衝突時の弾き飛ばしが大きくなるため 0.2 に設定
+          return d.hasInteracted ? 0.2 : 0.03;
         }),
       )
       .force(
         "collide",
         d3
+          // 衝突判定。ノード同士が重ならないようにする。半径 + マージン
           .forceCollide<Node>((d) => d.radius + 12)
           .strength(1)
           .iterations(8),
@@ -252,6 +255,7 @@
       if (changed && simulation) {
         nodes = [...nodes]; // Trigger reactivity for sizeFactor updates
         // Update collision force to account for new radii
+        // 定期的にノードサイズが変更されるため、衝突判定を更新する
         simulation.force(
           "collide",
           d3
@@ -259,7 +263,8 @@
             .strength(1)
             .iterations(8),
         );
-        simulation.alphaTarget(0.1).restart();
+        // シミュレーションを再開（散らばり防止のため alpha は低めに設定）
+        simulation.alpha(0.1).alphaTarget(0.1).restart();
         setTimeout(() => simulation?.alphaTarget(0), 100);
       }
     }, 1000);
@@ -365,23 +370,34 @@
 
       nodes = [...nodes]; // Explicitly trigger reactivity
 
-      if (simulation) {
-        // Update forces to apply new strength for interacted node
-        simulation.force(
-          "radial",
-          d3.forceRadial<Node>(0, 0, 0).strength((d) => {
-            return d.hasInteracted ? 0.8 : 0.03;
-          }),
-        );
-        simulation.force(
-          "collide",
-          d3
-            .forceCollide<Node>((d) => d.radius + 12)
-            .strength(1)
-            .iterations(8),
-        );
-        simulation.alphaTarget(0.8).restart();
-        setTimeout(() => simulation?.alphaTarget(0), 100);
+      if (simulation && !simulationUpdatePending) {
+        simulationUpdatePending = true;
+        requestAnimationFrame(() => {
+          if (!simulation) {
+            simulationUpdatePending = false;
+            return;
+          }
+          // Update forces to apply new strength for interacted node
+          // インタラクション時に中心への引力や衝突判定を更新する
+          simulation.force(
+            "radial",
+            d3.forceRadial<Node>(0, 0, 0).strength((d) => {
+              return d.hasInteracted ? 0.2 : 0.03;
+            }),
+          );
+          simulation.force(
+            "collide",
+            d3
+              .forceCollide<Node>((d) => d.radius + 12)
+              .strength(1)
+              .iterations(8),
+          );
+          // インタラクション時は少し強めに動かすが、散らばり防止のため alpha は 0.3 に留める
+          // エネルギー不足で引力が効かない問題を防ぐため、0.5 まで緩やかにリセットする
+          simulation.alpha(0.5).alphaTarget(0.3).restart();
+          setTimeout(() => simulation?.alphaTarget(0), 100);
+          simulationUpdatePending = false;
+        });
       }
 
       const newEvent: InteractionEvent = {
