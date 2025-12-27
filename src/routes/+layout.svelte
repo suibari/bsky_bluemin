@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
-	import { Search } from "lucide-svelte";
+	import { Search, Info } from "lucide-svelte";
 	import Login from "$lib/components/Login.svelte";
+	import AboutModal from "$lib/components/AboutModal.svelte";
 	import { initAuth } from "$lib/auth";
 	import { onMount } from "svelte";
 
 	let { children } = $props();
 	let searchTerm = $state("");
+	let showAbout = $state(false);
 
 	function handleSearch(e: SubmitEvent) {
 		e.preventDefault();
@@ -21,13 +23,25 @@
 	});
 </script>
 
+<AboutModal isOpen={showAbout} close={() => (showAbout = false)} />
+
 <header class="header">
 	<form class="search-box" onsubmit={handleSearch}>
 		<Search size={18} class="search-icon" />
 		<input type="text" placeholder="Search handle..." bind:value={searchTerm} />
 	</form>
 	<Login />
-	<div class="title">Bluemin'</div>
+
+	<div class="right-section">
+		<button
+			class="info-btn"
+			onclick={() => (showAbout = true)}
+			aria-label="About"
+		>
+			<Info size={20} />
+		</button>
+		<div class="title">Bluemin'</div>
+	</div>
 </header>
 
 <main>
@@ -120,8 +134,32 @@
 		color: #64748b;
 	}
 
+	.right-section {
+		display: flex;
+		align-items: center;
+		margin-left: auto;
+		gap: 8px;
+	}
+
+	.info-btn {
+		background: transparent;
+		border: none;
+		color: #94a3b8;
+		cursor: pointer;
+		padding: 6px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		transition: all 0.2s;
+	}
+
+	.info-btn:hover {
+		background: rgba(255, 255, 255, 0.1);
+		color: white;
+	}
+
 	.title {
-		margin-left: auto; /* Push to right */
 		font-weight: 800;
 		font-size: 1.4rem;
 		letter-spacing: -1px;
