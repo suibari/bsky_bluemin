@@ -287,7 +287,7 @@
           interactionCount: 0, // Will be incremented below
           sizeFactor: 1,
           radius: BASE_RADIUS,
-          hasInteracted: false,
+          hasInteracted: true,
           x: radius * Math.cos(angle),
           y: radius * Math.sin(angle),
         };
