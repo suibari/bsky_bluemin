@@ -5,7 +5,7 @@
   import { page } from "$app/state";
   import { AtpAgent } from "@atproto/api";
   import { Jetstream, type CommitEvent } from "@skyware/jetstream";
-  import AvatarNode from "$lib/components/AvatarNode.svelte";
+  import BubbleGalaxy from "$lib/components/BubbleGalaxy.svelte";
   import { authState } from "$lib/auth";
   import * as d3 from "d3";
 
@@ -43,17 +43,13 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let jetstream: Jetstream | null = null;
-  let simulation: d3.Simulation<Node, undefined> | null = null;
-  let decayInterval: any;
-  let simulationUpdatePending = false;
+
+  let galaxyComponent = $state<BubbleGalaxy>();
 
   let backgroundImage = $state<string | null>(null);
   let backgroundImageKey = $state<number>(0);
   let backgroundImageAuthor = $state<string | null>(null);
   let backgroundImageAuthorDid = $state<string | null>(null);
-
-  let zoomContainer = $state<HTMLElement | null>(null);
-  let transform = $state({ x: 0, y: 0, k: 1 });
 
   const MAX_FOLLOWEES = 256;
   const SAMPLE_POOL_SIZE = 2000;
@@ -130,7 +126,6 @@
       }
 
       nodes = selectedFollows;
-      initSimulation();
     } catch (e) {
       console.error(e);
       error = "Failed to fetch follows.";
@@ -139,46 +134,10 @@
     }
   }
 
-  function initSimulation() {
-    if (!browser) return;
-
-    simulation = d3
-      .forceSimulation<Node>(nodes)
-      .velocityDecay(0.01) // 摩擦係数（0〜1）。小さいほど止まりにくい（ふわふわする）。デフォルトは0.4
-      .alphaDecay(0.05) // シミュレーションの冷却速度（0〜1）。小さいほど長く動き続ける。デフォルトは0.0228
-      .force("charge", d3.forceManyBody<Node>().strength(-20)) // ノード間の反発力。負の値で反発、正の値で引力。
-      .force(
-        "radial",
-        d3.forceRadial<Node>(0, 0, 0).strength((d) => {
-          // 中心への引力。インタラクションがあったノードは強く、それ以外は弱く引き寄せる
-          // 強すぎると衝突時の弾き飛ばしが大きくなるため 0.2 に設定
-          return d.hasInteracted ? 0.2 : 0.03;
-        }),
-      )
-      .force(
-        "collide",
-        d3
-          // 衝突判定。ノード同士が重ならないようにする。半径 + マージン
-          .forceCollide<Node>((d) => d.radius + 12)
-          .strength(1)
-          .iterations(8),
-      )
-      .on("tick", () => {
-        nodes = [...nodes];
-      });
-  }
-
   function cleanup() {
     if (jetstream) {
       jetstream.close();
       jetstream = null;
-    }
-    if (simulation) {
-      simulation.stop();
-      simulation = null;
-    }
-    if (decayInterval) {
-      clearInterval(decayInterval);
     }
   }
 
@@ -201,18 +160,6 @@
         await tick();
 
         if (browser && nodes.length > 0) {
-          if (zoomContainer) {
-            const zoom = d3
-              .zoom<HTMLElement, unknown>()
-              .scaleExtent([0.1, 5])
-              .on("zoom", (event) => {
-                const { x, y, k } = event.transform;
-                transform = { x, y, k };
-              });
-
-            d3.select(zoomContainer).call(zoom);
-          }
-
           jetstream = new Jetstream({
             wantedCollections: [
               "app.bsky.feed.post",
@@ -238,36 +185,6 @@
     };
 
     init();
-
-    decayInterval = setInterval(() => {
-      let changed = false;
-      nodes.forEach((node) => {
-        if (node.interactionCount > 0) {
-          node.interactionCount = Math.max(0, node.interactionCount - 0.01);
-          const oldSize = node.sizeFactor;
-          node.sizeFactor = 1 + Math.log10(node.interactionCount + 1);
-          node.radius = BASE_RADIUS * node.sizeFactor;
-          if (Math.abs(oldSize - node.sizeFactor) > 0.01) {
-            changed = true;
-          }
-        }
-      });
-      if (changed && simulation) {
-        nodes = [...nodes]; // Trigger reactivity for sizeFactor updates
-        // Update collision force to account for new radii
-        // 定期的にノードサイズが変更されるため、衝突判定を更新する
-        simulation.force(
-          "collide",
-          d3
-            .forceCollide<Node>((d) => d.radius + 12)
-            .strength(1)
-            .iterations(8),
-        );
-        // シミュレーションを再開（散らばり防止のため alpha は低めに設定）
-        simulation.alpha(0.1).alphaTarget(0.1).restart();
-        setTimeout(() => simulation?.alphaTarget(0), 100);
-      }
-    }, 1000);
 
     return () => {
       cleanup();
@@ -370,34 +287,8 @@
 
       nodes = [...nodes]; // Explicitly trigger reactivity
 
-      if (simulation && !simulationUpdatePending) {
-        simulationUpdatePending = true;
-        requestAnimationFrame(() => {
-          if (!simulation) {
-            simulationUpdatePending = false;
-            return;
-          }
-          // Update forces to apply new strength for interacted node
-          // インタラクション時に中心への引力や衝突判定を更新する
-          simulation.force(
-            "radial",
-            d3.forceRadial<Node>(0, 0, 0).strength((d) => {
-              return d.hasInteracted ? 0.2 : 0.03;
-            }),
-          );
-          simulation.force(
-            "collide",
-            d3
-              .forceCollide<Node>((d) => d.radius + 12)
-              .strength(1)
-              .iterations(8),
-          );
-          // インタラクション時は少し強めに動かすが、散らばり防止のため alpha は 0.3 に留める
-          // エネルギー不足で引力が効かない問題を防ぐため、0.5 まで緩やかにリセットする
-          simulation.alpha(0.5).alphaTarget(0.3).restart();
-          setTimeout(() => simulation?.alphaTarget(0), 100);
-          simulationUpdatePending = false;
-        });
+      if (galaxyComponent) {
+        galaxyComponent.notifyInteraction();
       }
 
       const newEvent: InteractionEvent = {
@@ -417,11 +308,6 @@
     }
   }
 
-  $effect(() => {
-    if (browser && innerWidth && simulation) {
-      simulation.alpha(0.3).restart();
-    }
-  });
   function extractImageFromPostView(embed: any): string | null {
     if (!embed) return null;
 
@@ -468,28 +354,9 @@
         </div>
       {/if}
     {/key}
-    <div class="zoom-container" bind:this={zoomContainer}>
-      <div
-        class="transform-layer"
-        style="transform: translate({transform.x}px, {transform.y}px) scale({transform.k});"
-      >
-        <div class="nodes-wrapper">
-          {#each nodes as node (node.did)}
-            <AvatarNode
-              did={node.did}
-              avatar={node.avatar}
-              displayName={node.displayName}
-              event={latestEvents.get(node.did)}
-              x={node.x ?? 0}
-              y={node.y ?? 0}
-              sizeFactor={node.sizeFactor}
-              baseRadius={BASE_RADIUS}
-              hasInteracted={node.hasInteracted}
-            />
-          {/each}
-        </div>
-      </div>
-    </div>
+
+    <BubbleGalaxy bind:this={galaxyComponent} bind:nodes bind:latestEvents />
+
     {#if backgroundImage && backgroundImageAuthor}
       <a
         href="https://bsky.app/profile/{backgroundImageAuthorDid}"
@@ -548,38 +415,6 @@
     width: 100%;
     height: 100%;
     background: radial-gradient(circle at center, transparent 0%, #0f172a 90%);
-  }
-
-  .zoom-container {
-    width: 100%;
-    height: 100%;
-    cursor: grab;
-  }
-
-  .zoom-container:active {
-    cursor: grabbing;
-  }
-
-  .transform-layer {
-    width: 100%;
-    height: 100%;
-    transform-origin: 0 0;
-  }
-
-  .nodes-wrapper {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 0;
-    height: 0;
-  }
-
-  .status-overlay {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    z-index: 100;
   }
 
   .spinner {
