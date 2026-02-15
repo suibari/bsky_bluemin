@@ -58,7 +58,7 @@
             .force(
                 "radial",
                 d3.forceRadial<Node>(0, 0, 0).strength((d) => {
-                    return d.hasInteracted ? 0.3 : 0.8;
+                    return d.hasInteracted ? 0.8 : 0.1;
                 }),
             )
             .force(
@@ -163,7 +163,7 @@
                 simulation.force(
                     "radial",
                     d3.forceRadial<Node>(0, 0, 0).strength((d) => {
-                        return d.hasInteracted ? 0.3 : 0.8;
+                        return d.hasInteracted ? 0.8 : 0.1;
                     }),
                 );
                 simulation.force(
