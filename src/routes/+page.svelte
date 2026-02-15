@@ -292,6 +292,12 @@
           y: radius * Math.sin(angle),
         };
 
+        // Fix Race Condition: If mode changed to 'follow' while fetching profile,
+        // ensure this user is actually followed.
+        if (feedMode === "follow" && !followedProfiles.has(did)) {
+          return;
+        }
+
         nodes.push(authorNode);
       } catch (e) {
         // Failed to fetch profile, skip
