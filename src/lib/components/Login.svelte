@@ -4,21 +4,32 @@
 
   let handle = "";
   let showModal = false;
+  let isRedirecting = false;
 
   async function handleSignIn() {
     if (!handle) return;
-    await signIn(handle);
-    showModal = false;
+    isRedirecting = true;
+    try {
+      await signIn(handle);
+      // If successful, we might redirect away, so modal closing might not matter,
+      // but let's keep it consistent.
+      showModal = false;
+    } catch (e) {
+      console.error(e);
+      isRedirecting = false; // Reset on error
+    }
     handle = "";
   }
 
   function openModal() {
     showModal = true;
+    isRedirecting = false;
   }
 
   function closeModal() {
     showModal = false;
     handle = "";
+    isRedirecting = false;
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -78,10 +89,15 @@
             placeholder="handle.bsky.social"
             on:keydown={(e) => e.key === "Enter" && handleSignIn()}
             autofocus
+            disabled={isRedirecting}
           />
         </div>
-        <button on:click={handleSignIn} class="btn-submit" disabled={!handle}>
-          Sign In
+        <button
+          on:click={handleSignIn}
+          class="btn-submit"
+          disabled={!handle || isRedirecting}
+        >
+          {isRedirecting ? "Redirecting..." : "Sign In"}
         </button>
       </div>
     </div>

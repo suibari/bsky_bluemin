@@ -109,7 +109,11 @@
             } else {
                 // Critical Fix: Only update simulation if node count has changed (or explicit structural change).
                 // DYNAMIC UPDATES (tick) cause `nodes` ref to change, but we MUST NOT re-heat the simulation then.
-                if (nodes.length !== previousNodesLength) {
+                // We assume if the first node identity changes, the whole set changed (e.g. mode switch).
+                if (
+                    nodes.length !== previousNodesLength ||
+                    (nodes.length > 0 && nodes[0] !== simulation.nodes()[0])
+                ) {
                     simulation.nodes(nodes);
                     const currentAlpha = simulation.alpha();
                     if (currentAlpha < 0.1) {

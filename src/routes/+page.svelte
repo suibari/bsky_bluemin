@@ -49,16 +49,115 @@
 
   const SAMPLE_POOL_SIZE = 2000;
   const BASE_RADIUS = 24;
-  let feedMode = $state<"global" | "jp">("global");
-  let samplingRate = $derived(feedMode === "global" ? 400 : 10);
+  let feedMode = $state<"global" | "jp" | "follow">("global");
+  let samplingRate = $derived(
+    feedMode === "global" ? 400 : feedMode === "follow" ? 1 : 10,
+  );
+  let followedProfiles = $state<Map<string, any>>(new Map());
 
-  function toggleModeForce(mode: "global" | "jp") {
+  async function fetchFollows() {
+    console.log(
+      "fetchFollows called. Auth:",
+      $authState.isAuthenticated,
+      "Agent:",
+      !!agent,
+      "User:",
+      !!$authState.user,
+    );
+    if (!agent || !$authState.user) {
+      console.log("fetchFollows returning early due to missing agent or user");
+      return;
+    }
+    try {
+      let cursor;
+      const newFollows = new Map<string, any>();
+
+      // Add self first
+      try {
+        const selfProfile = await agent.getProfile({
+          actor: $authState.user.handle,
+        });
+        newFollows.set($authState.user.handle, selfProfile.data);
+      } catch (e) {
+        console.error("Failed to fetch self profile", e);
+      }
+
+      do {
+        const res = await agent.getFollows({
+          actor: $authState.user.handle,
+          cursor,
+          limit: 100,
+        });
+        res.data.follows.forEach((f) => newFollows.set(f.did, f));
+        cursor = res.data.cursor;
+      } while (cursor && newFollows.size < 5000);
+
+      followedProfiles = newFollows;
+      console.log("Followed profiles fetched:", followedProfiles.size);
+    } catch (e) {
+      console.error("Failed to fetch follows", e);
+    }
+  }
+
+  function initFollowNodes() {
+    console.log(
+      "Initializing follow nodes from",
+      followedProfiles.size,
+      "profiles",
+    );
+    const newNodes: Node[] = [];
+    for (const [did, profile] of followedProfiles) {
+      // Random position from center, but spread out nicely?
+      // Just random for now, simulation will fix it.
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() * 300 + 100;
+
+      newNodes.push({
+        did: did,
+        avatar: profile.avatar,
+        displayName: profile.displayName || profile.handle,
+        interactionCount: 0,
+        sizeFactor: 1,
+        radius: BASE_RADIUS,
+        hasInteracted: false,
+        x: radius * Math.cos(angle),
+        y: radius * Math.sin(angle),
+      });
+    }
+    nodes = newNodes;
+    console.log("Nodes initialized:", nodes.length);
+    if (galaxyComponent) {
+      // We need to give the simulation a kick because nodes changed.
+      // The reactive effect in BubbleGalaxy should handle it if nodes ref changes.
+      // explicitly notifying interaction might help too to trigger forces.
+      setTimeout(() => galaxyComponent?.notifyInteraction(), 100);
+    }
+  }
+
+  async function toggleModeForce(mode: "global" | "jp" | "follow") {
+    console.log("Toggling mode to:", mode);
+    if (mode === "follow") {
+      if ($authState.isAuthenticated) {
+        if (followedProfiles.size === 0) {
+          console.log("Fetching follows...");
+          await fetchFollows();
+        }
+        initFollowNodes();
+        feedMode = mode;
+        // Do NOT return here, we want to set feedMode
+        // But we initialized nodes, so we shouldn't clear them below.
+        latestEvents = new Map();
+        return;
+      } else {
+        return;
+      }
+    }
     feedMode = mode;
-    // Reset galaxy
+    // Reset galaxy for other modes
     nodes = [];
     latestEvents = new Map();
     if (galaxyComponent) {
-      galaxyComponent.notifyInteraction(); // Just to wake it up if needed, though nodes are empty
+      galaxyComponent.notifyInteraction();
     }
   }
 
@@ -140,6 +239,13 @@
       }
     }
 
+    // Filter by follow if in Follow mode
+    if (feedMode === "follow") {
+      if (!followedProfiles.has(event.did)) {
+        return;
+      }
+    }
+
     // ... existing logic ...
 
     // (Wait, I need to match the previous content to replace correctly)
@@ -158,6 +264,12 @@
       try {
         const profile = await agent.getProfile({ actor: did });
         const p = profile.data;
+
+        // Check if profile is safe
+        const unsafeLabels = getUnsafeLabels();
+        if (p.labels?.some((l) => unsafeLabels.includes(l.val))) {
+          return;
+        }
 
         // Limit pool size
         if (nodes.length >= SAMPLE_POOL_SIZE) {
@@ -296,6 +408,23 @@
     }
   }
 
+  function getUnsafeLabels(): string[] {
+    const labels = [
+      "porn",
+      "sexual",
+      "nudity",
+      "graphic-media",
+      "sexual-figurative",
+      "sexual-explicit",
+      "intolerant",
+      "spam",
+    ];
+    if (!$authState.isAuthenticated) {
+      labels.push("!no-unauthenticated");
+    }
+    return labels;
+  }
+
   function extractImageFromPostView(embed: any): string | null {
     if (!embed) return null;
 
@@ -321,16 +450,7 @@
   }
 
   function isSafeContent(postView: any): boolean {
-    const unsafeLabels = [
-      "porn",
-      "sexual",
-      "nudity",
-      "graphic-media",
-      "sexual-figurative",
-      "sexual-explicit",
-      "intolerant",
-      "spam",
-    ];
+    const unsafeLabels = getUnsafeLabels();
 
     // Check post labels
     if (postView.labels && Array.isArray(postView.labels)) {
@@ -365,7 +485,15 @@
   {/key}
 
   <div class="overlay-info">
-    <h1>{feedMode === "global" ? "Global Feed" : "Japanese Feed"}</h1>
+    <h1>
+      {#if feedMode === "global"}
+        Global Feed
+      {:else if feedMode === "jp"}
+        Japanese Feed
+      {:else}
+        Follow Feed
+      {/if}
+    </h1>
     <p>
       Sampling 1/{samplingRate} events • Max {SAMPLE_POOL_SIZE} nodes
     </p>
@@ -389,6 +517,17 @@
       >
         JP
       </button>
+      {#if $authState.isAuthenticated}
+        <button
+          class="mode-btn {feedMode === 'follow' ? 'active' : ''}"
+          onclick={() => {
+            // toggleModeForce handles fetching
+            toggleModeForce("follow");
+          }}
+        >
+          Follow
+        </button>
+      {/if}
     </div>
   </div>
 
