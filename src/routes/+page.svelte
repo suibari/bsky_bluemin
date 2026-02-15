@@ -163,13 +163,15 @@
             const res = await agent.getPosts({ uris: [postUri] });
             if (res.data.posts.length > 0) {
               const postView = res.data.posts[0];
-              const img = extractImageFromPostView(postView.embed);
-              if (img) {
-                backgroundImage = img;
-                backgroundImageKey++;
-                backgroundImageAuthor =
-                  postView.author.displayName || postView.author.handle;
-                backgroundImageAuthorDid = postView.author.did;
+              if (isSafeContent(postView)) {
+                const img = extractImageFromPostView(postView.embed);
+                if (img) {
+                  backgroundImage = img;
+                  backgroundImageKey++;
+                  backgroundImageAuthor =
+                    postView.author.displayName || postView.author.handle;
+                  backgroundImageAuthorDid = postView.author.did;
+                }
               }
             }
           } catch (e) {
@@ -192,13 +194,15 @@
               const res = await agent.getPosts({ uris: [uri] });
               if (res.data.posts.length > 0) {
                 const postView = res.data.posts[0];
-                const img = extractImageFromPostView(postView.embed);
-                if (img) {
-                  backgroundImage = img;
-                  backgroundImageKey++;
-                  backgroundImageAuthor =
-                    postView.author.displayName || postView.author.handle;
-                  backgroundImageAuthorDid = postView.author.did;
+                if (isSafeContent(postView)) {
+                  const img = extractImageFromPostView(postView.embed);
+                  if (img) {
+                    backgroundImage = img;
+                    backgroundImageKey++;
+                    backgroundImageAuthor =
+                      postView.author.displayName || postView.author.handle;
+                    backgroundImageAuthorDid = postView.author.did;
+                  }
                 }
               }
             } catch (e) {
@@ -266,6 +270,39 @@
     }
 
     return null;
+  }
+
+  function isSafeContent(postView: any): boolean {
+    const unsafeLabels = [
+      "porn",
+      "sexual",
+      "nudity",
+      "graphic-media",
+      "sexual-figurative",
+      "sexual-explicit",
+      "intolerant",
+      "spam",
+    ];
+
+    // Check post labels
+    if (postView.labels && Array.isArray(postView.labels)) {
+      for (const label of postView.labels) {
+        if (unsafeLabels.includes(label.val)) return false;
+      }
+    }
+
+    // Check author labels
+    if (
+      postView.author &&
+      postView.author.labels &&
+      Array.isArray(postView.author.labels)
+    ) {
+      for (const label of postView.author.labels) {
+        if (unsafeLabels.includes(label.val)) return false;
+      }
+    }
+
+    return true;
   }
 </script>
 
