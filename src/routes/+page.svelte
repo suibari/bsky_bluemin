@@ -47,9 +47,20 @@
   let backgroundImageAuthor = $state<string | null>(null);
   let backgroundImageAuthorDid = $state<string | null>(null);
 
-  const POST_SAMPLING_RATE = 1000;
   const SAMPLE_POOL_SIZE = 2000;
   const BASE_RADIUS = 24;
+  let feedMode = $state<"global" | "jp">("global");
+  let samplingRate = $derived(feedMode === "global" ? 400 : 10);
+
+  function toggleModeForce(mode: "global" | "jp") {
+    feedMode = mode;
+    // Reset galaxy
+    nodes = [];
+    latestEvents = new Map();
+    if (galaxyComponent) {
+      galaxyComponent.notifyInteraction(); // Just to wake it up if needed, though nodes are empty
+    }
+  }
 
   let processedCount = 0;
 
@@ -92,11 +103,50 @@
     loading = false;
   }
 
+  $effect(() => {
+    // Optional: Log mode change or handle side effects
+    // Re-connect if feedMode changes? No, same stream for both.
+    // Just need to clear nodes if mode changes, which toggleModeForce does.
+  });
+
   async function processEvent(event: CommitEvent<any>) {
     // Sampling logic
-    if (Math.random() * POST_SAMPLING_RATE >= 1) {
+    if (Math.random() * samplingRate >= 1) {
       return;
     }
+
+    const commit = event.commit as any;
+    const record = commit.record;
+
+    // Filter by language if in JP mode
+    if (feedMode === "jp") {
+      // Only refine filtering for posts, as other events don't have langs.
+      // If the user wants "JP Only", we generally only know that for posts.
+      // So we strictly only show posts with langs=['ja'].
+      // Likes/Reposts/Follows from JP users? We don't know the user's language easily without fetching profile.
+      // So we assume "JP Mode" means "Japanese Posts Only".
+
+      if (commit.collection !== "app.bsky.feed.post") {
+        return;
+      }
+
+      if (
+        !record.langs ||
+        !Array.isArray(record.langs) ||
+        record.langs.length !== 1 ||
+        record.langs[0] !== "ja"
+      ) {
+        return;
+      }
+    }
+
+    // ... existing logic ...
+
+    // (Wait, I need to match the previous content to replace correctly)
+
+    // Redoing the replace block to cover the whole processEvent start and UI changes in multiple steps if needed,
+    // or one big block if they are close. They are far apart (script vs template).
+    // I will do UI first.
 
     const did = event.did;
 
@@ -138,8 +188,6 @@
     }
 
     // Process interaction
-    const commit = event.commit as any;
-    const record = commit.record;
     let type = "";
     let text = "";
     let url = "";
@@ -317,8 +365,31 @@
   {/key}
 
   <div class="overlay-info">
-    <h1>Global Feed</h1>
-    <p>Sampling 1/{POST_SAMPLING_RATE} posts • Max {SAMPLE_POOL_SIZE} nodes</p>
+    <h1>{feedMode === "global" ? "Global Feed" : "Japanese Feed"}</h1>
+    <p>
+      Sampling 1/{samplingRate} events • Max {SAMPLE_POOL_SIZE} nodes
+    </p>
+
+    <div class="mode-switcher">
+      <button
+        class="mode-btn {feedMode === 'global' ? 'active' : ''}"
+        onclick={() => {
+          feedMode = "global";
+          toggleModeForce("global");
+        }}
+      >
+        Global
+      </button>
+      <button
+        class="mode-btn {feedMode === 'jp' ? 'active' : ''}"
+        onclick={() => {
+          feedMode = "jp";
+          toggleModeForce("jp");
+        }}
+      >
+        JP
+      </button>
+    </div>
   </div>
 
   <BubbleGalaxy bind:this={galaxyComponent} bind:nodes bind:latestEvents />
@@ -417,5 +488,41 @@
 
   .bg-author-info:hover {
     color: white;
+  }
+
+  .mode-switcher {
+    margin-top: 12px;
+    display: flex;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 2px;
+    backdrop-filter: blur(5px);
+    pointer-events: auto; /* Enable clicks */
+    width: fit-content;
+  }
+
+  .mode-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    padding: 6px 16px;
+    border-radius: 18px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+
+  .mode-btn.active {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    font-weight: 700;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .mode-btn:hover:not(.active) {
+    color: white;
+    background: rgba(255, 255, 255, 0.05);
   }
 </style>
